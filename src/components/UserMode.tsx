@@ -20,6 +20,11 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
   const currentChallenge = challenges[currentIndex];
   const isLastChallenge = currentIndex === challenges.length - 1;
 
+  // Check if icon is AI generated (data URL) or emoji
+  const isAIIcon = (iconUrl: string): boolean => {
+    return iconUrl.startsWith('data:image/');
+  };
+
   // Timer logic
   useEffect(() => {
     let interval: number | undefined;
@@ -145,7 +150,15 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
                   }`}
                 >
                   <div className="flex items-center gap-4">
-                    <span className="text-5xl">{challenge?.iconUrl}</span>
+                    {challenge && isAIIcon(challenge.iconUrl) ? (
+                      <img
+                        src={challenge.iconUrl}
+                        alt={challenge.text}
+                        className="w-16 h-16 md:w-20 md:h-20 rounded-xl object-cover"
+                      />
+                    ) : (
+                      <span className="text-5xl">{challenge?.iconUrl}</span>
+                    )}
                     <span className="text-2xl font-bold">{challenge?.text}</span>
                     {isFastest && <span className="text-3xl">⭐</span>}
                   </div>
@@ -201,7 +214,15 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
 
         {/* Challenge icon */}
         <div className="flex justify-center mb-8">
-          <div className="text-9xl md:text-[12rem] leading-none">{currentChallenge.iconUrl}</div>
+          {isAIIcon(currentChallenge.iconUrl) ? (
+            <img
+              src={currentChallenge.iconUrl}
+              alt={currentChallenge.text}
+              className="w-64 h-64 md:w-80 md:h-80 rounded-3xl shadow-2xl object-cover"
+            />
+          ) : (
+            <div className="text-9xl md:text-[12rem] leading-none">{currentChallenge.iconUrl}</div>
+          )}
         </div>
 
         {/* Challenge text */}

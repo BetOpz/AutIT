@@ -1,31 +1,122 @@
 import { useState, useEffect } from 'react';
 import { AppData, AppMode, Session, Challenge } from './types';
-import { loadData, saveData, exportData, importData } from './utils/storage';
+import { loadData as loadLocalData, saveData as saveLocalData, exportData, importData } from './utils/storage';
+import { firebaseService } from './services/firebase.service';
 import { UserMode } from './components/UserMode';
 import { AdminPanel } from './components/AdminPanel';
 
 function App() {
-  const [appData, setAppData] = useState<AppData>(() => loadData());
+  const [appData, setAppData] = useState<AppData>(() => loadLocalData());
   const [mode, setMode] = useState<AppMode>('user');
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'error' | 'offline'>('offline');
 
-  // Save to localStorage whenever appData changes
+  // Initialize Firebase and set up real-time listeners
   useEffect(() => {
-    saveData(appData);
-  }, [appData]);
+    let isMounted = true;
 
-  const handleSessionComplete = (session: Session) => {
-    setAppData((prev) => ({
-      ...prev,
-      sessions: [...prev.sessions, session],
+    const init = async () => {
+      try {
+        setSyncStatus('syncing');
+
+        // Initialize Firebase - this will load from Firebase or push local data
+        const initialData = await firebaseService.initialize();
+
+        if (isMounted) {
+          setAppData(initialData);
+          saveLocalData(initialData); // Update local cache
+          setIsInitialized(true);
+          setSyncStatus('synced');
+        }
+
+        // Subscribe to real-time changes for challenges
+        const unsubscribeChallenges = firebaseService.subscribeToChallenges((challenges) => {
+          if (isMounted) {
+            setAppData((prev) => {
+              const updated = { ...prev, challenges };
+              saveLocalData(updated); // Keep local cache in sync
+              return updated;
+            });
+            setSyncStatus('synced');
+          }
+        });
+
+        // Subscribe to real-time changes for sessions
+        const unsubscribeSessions = firebaseService.subscribeToSessions((sessions) => {
+          if (isMounted) {
+            setAppData((prev) => {
+              const updated = { ...prev, sessions };
+              saveLocalData(updated); // Keep local cache in sync
+              return updated;
+            });
+          }
+        });
+
+        // Cleanup function
+        return () => {
+          isMounted = false;
+          unsubscribeChallenges();
+          unsubscribeSessions();
+          firebaseService.cleanup();
+        };
+      } catch (error) {
+        console.error('Firebase initialization error:', error);
+        if (isMounted) {
+          setSyncStatus('error');
+          // Fall back to local data
+          const localData = loadLocalData();
+          setAppData(localData);
+          setIsInitialized(true);
+        }
+      }
+    };
+
+    init();
+  }, []);
+
+  // Save to both localStorage and Firebase whenever challenges change
+  useEffect(() => {
+    if (isInitialized) {
+      saveLocalData(appData);
+    }
+  }, [appData, isInitialized]);
+
+  const handleSessionComplete = async (session: Session) => {
+    const updatedData = {
+      ...appData,
+      sessions: [...appData.sessions, session],
       currentSession: null,
-    }));
+    };
+
+    setAppData(updatedData);
+
+    // Save session to Firebase
+    try {
+      await firebaseService.saveSession(session);
+      setSyncStatus('synced');
+    } catch (error) {
+      console.error('Error saving session to Firebase:', error);
+      setSyncStatus('error');
+    }
   };
 
-  const handleUpdateChallenges = (challenges: Challenge[]) => {
-    setAppData((prev) => ({
-      ...prev,
+  const handleUpdateChallenges = async (challenges: Challenge[]) => {
+    const updatedData = {
+      ...appData,
       challenges,
-    }));
+    };
+
+    setAppData(updatedData);
+
+    // Save to Firebase
+    try {
+      setSyncStatus('syncing');
+      await firebaseService.saveChallenges(challenges);
+      setSyncStatus('synced');
+    } catch (error) {
+      console.error('Error saving challenges to Firebase:', error);
+      setSyncStatus('error');
+    }
   };
 
   const handleExport = () => {
@@ -51,20 +142,31 @@ function App() {
   const handleImport = (file: File) => {
     const reader = new FileReader();
 
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const content = e.target?.result as string;
         const imported = importData(content);
 
         if (imported) {
           const confirmImport = window.confirm(
-            `Import ${imported.challenges.length} challenges? This will replace your current data.`
+            `Import ${imported.challenges.length} challenges? This will replace your current data on all devices.`
           );
 
           if (confirmImport) {
             setAppData(imported);
-            saveData(imported);
-            alert('✓ Data imported successfully!');
+            saveLocalData(imported);
+
+            // Push to Firebase
+            try {
+              setSyncStatus('syncing');
+              await firebaseService.saveChallenges(imported.challenges);
+              setSyncStatus('synced');
+              alert('✓ Data imported successfully and synced to cloud!');
+            } catch (error) {
+              console.error('Error syncing imported data to Firebase:', error);
+              setSyncStatus('error');
+              alert('✓ Data imported locally, but cloud sync failed. Will retry automatically.');
+            }
           }
         } else {
           alert('❌ Invalid file format. Please select a valid backup file.');
@@ -82,10 +184,47 @@ function App() {
     reader.readAsText(file);
   };
 
+  // Sync status indicator
+  const getSyncStatusDisplay = () => {
+    switch (syncStatus) {
+      case 'syncing':
+        return { icon: '🔄', text: 'Syncing...', color: 'text-blue-600' };
+      case 'synced':
+        return { icon: '✓', text: 'Synced', color: 'text-green-600' };
+      case 'error':
+        return { icon: '⚠️', text: 'Sync Error', color: 'text-red-600' };
+      case 'offline':
+        return { icon: '📱', text: 'Local Only', color: 'text-gray-600' };
+    }
+  };
+
+  const syncDisplay = getSyncStatusDisplay();
+
+  if (!isInitialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-primary mb-4"></div>
+          <p className="text-2xl font-bold text-gray-900">Loading...</p>
+          <p className="text-lg text-gray-600 mt-2">Syncing your challenges</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen">
       {/* Mode Toggle Button - Fixed in top right */}
-      <div className="fixed top-4 right-4 z-40">
+      <div className="fixed top-4 right-4 z-40 flex items-center gap-3">
+        {/* Sync Status Indicator */}
+        <div className={`bg-white px-4 py-2 rounded-xl shadow-lg border-2 border-gray-200 ${syncDisplay.color}`}>
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{syncDisplay.icon}</span>
+            <span className="text-sm font-bold">{syncDisplay.text}</span>
+          </div>
+        </div>
+
+        {/* Mode Toggle */}
         <button
           onClick={() => setMode(mode === 'user' ? 'admin' : 'user')}
           className="bg-gray-900 text-white px-6 py-3 rounded-xl text-lg font-bold hover:bg-gray-700 transition-colors shadow-xl border-4 border-white"

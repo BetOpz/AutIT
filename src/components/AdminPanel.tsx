@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Challenge } from '../types';
 import { generateId } from '../utils/storage';
+import { replicateService } from '../services/replicate.service';
 
 interface AdminPanelProps {
   challenges: Challenge[];
@@ -33,6 +34,12 @@ export const AdminPanel = ({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiPickerFor, setEmojiPickerFor] = useState<'new' | 'edit'>('new');
 
+  // AI Icon Generation state
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiGenerationError, setAiGenerationError] = useState<string | null>(null);
+  const [generatedIconPreview, setGeneratedIconPreview] = useState<string | null>(null);
+  const [iconMode, setIconMode] = useState<'emoji' | 'ai'>('emoji');
+
   const handleAddChallenge = () => {
     if (!newChallengeText.trim()) {
       alert('Please enter challenge text');
@@ -50,6 +57,45 @@ export const AdminPanel = ({
     onUpdateChallenges([...challenges, newChallenge]);
     setNewChallengeText('');
     setNewChallengeIcon('🎯');
+    setGeneratedIconPreview(null);
+    setIconMode('emoji');
+  };
+
+  const handleGenerateAIIcon = async () => {
+    if (!newChallengeText.trim()) {
+      alert('Please enter challenge text first');
+      return;
+    }
+
+    if (!replicateService.isConfigured()) {
+      alert('AI Icon Generation is not configured. Please add VITE_REPLICATE_API_TOKEN to your .env file');
+      return;
+    }
+
+    setIsGeneratingAI(true);
+    setAiGenerationError(null);
+
+    try {
+      const dataUrl = await replicateService.generateIcon(newChallengeText);
+      setGeneratedIconPreview(dataUrl);
+      setNewChallengeIcon(dataUrl);
+      setIconMode('ai');
+    } catch (error) {
+      console.error('AI generation error:', error);
+      setAiGenerationError(error instanceof Error ? error.message : 'Failed to generate icon');
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
+
+  const handleRegenerateIcon = () => {
+    handleGenerateAIIcon();
+  };
+
+  const handleUseEmoji = () => {
+    setIconMode('emoji');
+    setNewChallengeIcon('🎯');
+    setGeneratedIconPreview(null);
   };
 
   const handleStartEdit = (challenge: Challenge) => {
@@ -114,10 +160,16 @@ export const AdminPanel = ({
   const handleEmojiSelect = (emoji: string) => {
     if (emojiPickerFor === 'new') {
       setNewChallengeIcon(emoji);
+      setIconMode('emoji');
     } else {
       setEditIcon(emoji);
     }
     setShowEmojiPicker(false);
+  };
+
+  // Check if icon is AI generated (data URL) or emoji
+  const isAIIcon = (iconUrl: string): boolean => {
+    return iconUrl.startsWith('data:image/');
   };
 
   return (
@@ -184,36 +236,134 @@ export const AdminPanel = ({
 
             <div>
               <label className="block text-xl font-bold mb-2">Icon</label>
-              <div className="flex items-center gap-4">
-                <div className="text-8xl">{newChallengeIcon}</div>
+
+              {/* Icon Mode Tabs */}
+              <div className="flex gap-2 mb-4">
                 <button
-                  onClick={() => {
-                    setEmojiPickerFor('new');
-                    setShowEmojiPicker(!showEmojiPicker);
-                  }}
-                  className="bg-gray-200 text-gray-900 px-6 py-3 rounded-xl text-lg font-bold hover:bg-gray-300 transition-colors"
+                  onClick={() => setIconMode('emoji')}
+                  className={`px-6 py-3 rounded-xl text-lg font-bold transition-colors ${
+                    iconMode === 'emoji'
+                      ? 'bg-primary text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
                 >
-                  Choose Icon
+                  😊 Emoji
+                </button>
+                <button
+                  onClick={() => setIconMode('ai')}
+                  className={`px-6 py-3 rounded-xl text-lg font-bold transition-colors ${
+                    iconMode === 'ai'
+                      ? 'bg-primary text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  🤖 AI Generated
                 </button>
               </div>
-            </div>
 
-            {showEmojiPicker && (
-              <div className="bg-gray-100 rounded-xl p-4">
-                <p className="text-lg font-bold mb-3">Select an icon:</p>
-                <div className="grid grid-cols-5 md:grid-cols-10 gap-3">
-                  {EMOJI_OPTIONS.map((emoji) => (
+              {/* Emoji Mode */}
+              {iconMode === 'emoji' && (
+                <div>
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="text-8xl">{newChallengeIcon}</div>
                     <button
-                      key={emoji}
-                      onClick={() => handleEmojiSelect(emoji)}
-                      className="text-5xl hover:bg-gray-200 rounded-lg p-2 transition-colors"
+                      onClick={() => {
+                        setEmojiPickerFor('new');
+                        setShowEmojiPicker(!showEmojiPicker);
+                      }}
+                      className="bg-gray-200 text-gray-900 px-6 py-3 rounded-xl text-lg font-bold hover:bg-gray-300 transition-colors"
                     >
-                      {emoji}
+                      Choose Emoji
                     </button>
-                  ))}
+                  </div>
+
+                  {showEmojiPicker && (
+                    <div className="bg-gray-100 rounded-xl p-4">
+                      <p className="text-lg font-bold mb-3">Select an icon:</p>
+                      <div className="grid grid-cols-5 md:grid-cols-10 gap-3">
+                        {EMOJI_OPTIONS.map((emoji) => (
+                          <button
+                            key={emoji}
+                            onClick={() => handleEmojiSelect(emoji)}
+                            className="text-5xl hover:bg-gray-200 rounded-lg p-2 transition-colors"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              )}
+
+              {/* AI Mode */}
+              {iconMode === 'ai' && (
+                <div className="space-y-4">
+                  {!generatedIconPreview && !isGeneratingAI && (
+                    <div className="text-center py-8 bg-gray-100 rounded-xl">
+                      <p className="text-xl mb-4">Generate a custom AI icon for this challenge</p>
+                      <button
+                        onClick={handleGenerateAIIcon}
+                        disabled={!newChallengeText.trim()}
+                        className={`px-8 py-4 rounded-xl text-xl font-bold transition-colors ${
+                          newChallengeText.trim()
+                            ? 'bg-purple-600 text-white hover:bg-purple-700'
+                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        }`}
+                      >
+                        🎨 Generate AI Icon
+                      </button>
+                    </div>
+                  )}
+
+                  {isGeneratingAI && (
+                    <div className="text-center py-12 bg-blue-50 rounded-xl">
+                      <div className="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-primary mb-4"></div>
+                      <p className="text-2xl font-bold text-primary">Generating your icon...</p>
+                      <p className="text-lg text-gray-600 mt-2">This may take 10-30 seconds</p>
+                    </div>
+                  )}
+
+                  {generatedIconPreview && (
+                    <div className="bg-gray-100 rounded-xl p-6">
+                      <div className="text-center mb-4">
+                        <img
+                          src={generatedIconPreview}
+                          alt="Generated icon"
+                          className="w-64 h-64 mx-auto rounded-xl shadow-lg object-cover"
+                        />
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={handleRegenerateIcon}
+                          className="flex-1 bg-warning text-white px-6 py-3 rounded-xl text-lg font-bold hover:bg-orange-600 transition-colors"
+                        >
+                          🔄 Regenerate
+                        </button>
+                        <button
+                          onClick={handleUseEmoji}
+                          className="flex-1 bg-gray-300 text-gray-900 px-6 py-3 rounded-xl text-lg font-bold hover:bg-gray-400 transition-colors"
+                        >
+                          Use Emoji Instead
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {aiGenerationError && (
+                    <div className="bg-red-100 border-4 border-red-400 rounded-xl p-4">
+                      <p className="text-lg font-bold text-red-700">❌ Error: {aiGenerationError}</p>
+                      <button
+                        onClick={handleGenerateAIIcon}
+                        className="mt-3 bg-red-600 text-white px-6 py-2 rounded-lg text-base font-bold hover:bg-red-700"
+                      >
+                        Try Again
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             <button
               onClick={handleAddChallenge}
@@ -245,7 +395,15 @@ export const AdminPanel = ({
                     // Edit mode
                     <div className="space-y-4">
                       <div className="flex items-center gap-4 mb-4">
-                        <div className="text-6xl">{editIcon}</div>
+                        {isAIIcon(editIcon) ? (
+                          <img
+                            src={editIcon}
+                            alt="Challenge icon"
+                            className="w-24 h-24 rounded-xl object-cover"
+                          />
+                        ) : (
+                          <div className="text-6xl">{editIcon}</div>
+                        )}
                         <button
                           onClick={() => {
                             setEmojiPickerFor('edit');
@@ -283,11 +441,21 @@ export const AdminPanel = ({
                   ) : (
                     // View mode
                     <div className="flex items-center gap-4">
-                      <div className="text-6xl flex-shrink-0">{challenge.iconUrl}</div>
+                      {isAIIcon(challenge.iconUrl) ? (
+                        <img
+                          src={challenge.iconUrl}
+                          alt={challenge.text}
+                          className="w-24 h-24 rounded-xl object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="text-6xl flex-shrink-0">{challenge.iconUrl}</div>
+                      )}
 
                       <div className="flex-grow">
                         <p className="text-2xl font-bold">{challenge.text}</p>
-                        <p className="text-lg text-gray-500">Order: {challenge.order}</p>
+                        <p className="text-lg text-gray-500">
+                          Order: {challenge.order} • {isAIIcon(challenge.iconUrl) ? '🤖 AI Icon' : '😊 Emoji'}
+                        </p>
                       </div>
 
                       <div className="flex flex-col gap-2">

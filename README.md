@@ -1,24 +1,42 @@
 # Autism-Friendly Daily Challenges App
 
-A simple, high-contrast, visual daily challenges application designed specifically for neurodivergent users (autism-friendly). Features bold visuals, clear interaction flows, and extreme simplicity.
+A simple, high-contrast, visual daily challenges application designed specifically for neurodivergent users (autism-friendly). Features bold visuals, clear interaction flows, extreme simplicity, **real-time cloud sync**, and **AI-generated custom icons**.
 
 ## Features
 
 ### User Mode (Challenge Completion)
-- **Large, clear challenge display** with emoji icons (250x250px minimum)
+- **Large, clear challenge display** with emoji or AI-generated icons (250x250px minimum)
 - **Timer system** with START/STOP functionality
 - **Visual feedback** with celebratory fireworks animation on completion
 - **Progress tracking** showing current challenge and overall progress
 - **Summary screen** displaying all completed challenges with times
 - **Best time highlighting** to celebrate achievements
+- **Real-time sync** across all your devices
 
 ### Admin Panel (Management Mode)
-- **Add challenges** with custom text and emoji icons
+- **Add challenges** with custom text and choice of emoji or AI-generated icons
+- **AI Icon Generation** - Create custom, realistic icons using FLUX AI model
 - **Edit challenges** - modify text and change icons
 - **Delete challenges** with confirmation dialog
 - **Reorder challenges** using up/down arrows
 - **Import/Export** functionality for backup and restore
 - **Character counter** (100 character limit for clarity)
+- **Real-time cloud sync** - changes appear instantly on all devices
+
+### Cloud Sync (Firebase Realtime Database)
+- **Automatic synchronization** across all your devices
+- **Real-time updates** - changes made on one device appear instantly on others
+- **Offline support** - app works offline with LocalStorage fallback
+- **Sync status indicator** - always know your sync status (✓ Synced, 🔄 Syncing, ⚠️ Error, 📱 Local Only)
+- **Conflict-free** - Firebase ensures data consistency
+
+### AI Icon Generation (Replicate FLUX)
+- **Custom AI-generated icons** for each challenge
+- **Simple, clear illustrations** optimized for autism-friendly design
+- **High contrast, bold visuals** - automatically generated
+- **Instant preview** - see your icon before saving
+- **Regenerate option** - don't like it? Generate a new one
+- **Fallback to emoji** - always have the emoji option available
 
 ## Design Principles
 
@@ -43,18 +61,54 @@ A simple, high-contrast, visual daily challenges application designed specifical
 ## Tech Stack
 
 - **React 18** with TypeScript for type safety
+- **Firebase Realtime Database** for cloud sync and real-time updates
+- **Replicate FLUX** for AI-generated custom icons
 - **Tailwind CSS** for styling
 - **Vite** for fast development and building
-- **LocalStorage** for data persistence (no backend needed)
+- **LocalStorage** for offline support and caching
 - **Mobile-first** responsive design
 
 ## Getting Started
+
+### Prerequisites
+
+1. **Firebase Project** (for cloud sync):
+   - Create a project at [Firebase Console](https://console.firebase.google.com/)
+   - Enable Realtime Database
+   - Copy your config credentials
+
+2. **Replicate API Key** (for AI icon generation):
+   - Sign up at [Replicate](https://replicate.com/)
+   - Get your API token from account settings
 
 ### Installation
 
 ```bash
 npm install
 ```
+
+### Environment Setup
+
+Create a `.env` file in the root directory:
+
+```bash
+# Firebase Configuration
+VITE_FIREBASE_API_KEY=your_api_key_here
+VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain_here
+VITE_FIREBASE_DATABASE_URL=your_database_url_here
+VITE_FIREBASE_PROJECT_ID=your_project_id_here
+VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket_here
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id_here
+VITE_FIREBASE_APP_ID=your_app_id_here
+VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id_here
+
+# Replicate API Configuration
+VITE_REPLICATE_API_TOKEN=your_replicate_api_token_here
+```
+
+See `.env.example` for a template.
+
+**Note:** The app will work without these credentials, but will use LocalStorage only (no cloud sync or AI icons).
 
 ### Development
 
@@ -91,20 +145,49 @@ The app comes with 5 sample challenges ready to use:
 
 ### Managing Challenges (Admin Panel)
 1. Click **⚙️ Admin** button in top-right corner
-2. **Add new challenges**: Enter text, choose emoji icon, click Add
-3. **Edit challenges**: Click Edit button, modify, and Save
-4. **Reorder**: Use ↑ ↓ buttons to change order
-5. **Delete**: Click 🗑️ and confirm
-6. **Backup**: Click Export Data to download JSON file
-7. **Restore**: Click Import Data to restore from backup
+2. **Add new challenges**:
+   - Enter challenge text (max 100 characters)
+   - Choose icon type:
+     - **Emoji**: Select from 30 pre-made emoji icons
+     - **AI Generated**: Click "Generate AI Icon" to create custom illustration
+   - Click Add Challenge
+3. **Generate AI Icons**:
+   - Enter your challenge text first
+   - Switch to "AI Generated" tab
+   - Click "🎨 Generate AI Icon"
+   - Wait 10-30 seconds for generation
+   - Preview the generated icon
+   - Click "🔄 Regenerate" if you want a different version
+   - Or switch back to emoji if needed
+4. **Edit challenges**: Click Edit button, modify text/icon, and Save
+5. **Reorder**: Use ↑ ↓ buttons to change order
+6. **Delete**: Click 🗑️ and confirm
+7. **Backup**: Click Export Data to download JSON file
+8. **Restore**: Click Import Data to restore from backup
+
+### Sync Status Indicator
+Watch the sync status in the top-right corner:
+- **✓ Synced** - All changes saved to cloud
+- **🔄 Syncing...** - Currently saving changes
+- **⚠️ Sync Error** - Connection issue, will retry
+- **📱 Local Only** - No Firebase configured, using LocalStorage only
 
 ## Data Storage
 
-All data is stored locally in your browser's LocalStorage:
-- No account required
-- No internet connection needed (after first load)
-- Data persists between sessions
-- Easy backup/restore via JSON export/import
+Data is stored using a **hybrid approach**:
+
+### With Firebase (Recommended)
+- **Cloud sync** - Data automatically syncs across all your devices in real-time
+- **Offline support** - Works offline, syncs when connection returns
+- **LocalStorage cache** - Fast local access with cloud backup
+- **No account required** - Just configure Firebase and go
+- **Persistent** - Data never lost, even if you clear browser cache
+
+### Without Firebase (LocalStorage Only)
+- **Local only** - Data stored in browser's LocalStorage
+- **No internet needed** - Works completely offline
+- **Device-specific** - Data doesn't sync between devices
+- **Backup/restore** - Manual export/import via JSON files
 
 ## Browser Compatibility
 
