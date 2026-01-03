@@ -375,15 +375,15 @@ export const AdminPanel = ({
                       <p className="text-xl mb-4">Generate a custom AI icon for this challenge</p>
                       <button
                         onClick={handleGenerateAIIcon}
-                        disabled={!newChallengeText.trim()}
-                        className={`px-8 py-4 rounded-xl text-xl font-bold transition-colors ${
-                          newChallengeText.trim()
-                            ? 'bg-purple-600 text-white hover:bg-purple-700'
-                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        }`}
+                        className="px-8 py-4 rounded-xl text-xl font-bold transition-colors bg-purple-600 text-white hover:bg-purple-700 cursor-pointer"
                       >
                         🎨 Generate AI Icon
                       </button>
+                      {!newChallengeText.trim() && (
+                        <p className="text-sm text-gray-500 mt-3">
+                          💡 Enter challenge text above to generate an icon
+                        </p>
+                      )}
                     </div>
                   )}
 
