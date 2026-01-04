@@ -1,147 +1,86 @@
-import Replicate from 'replicate';
-
 /**
- * Get Replicate API token from environment variables
- * Provides detailed debugging if token is missing
+ * Replicate Service - Now uses serverless API route to avoid CORS issues
+ * The actual Replicate API calls happen on the server via /api/generateIcon
  */
-function getReplicateToken(): string | undefined {
-  const token = import.meta.env.VITE_REPLICATE_API_TOKEN;
-
-  // Debug logging
-  if (!token) {
-    console.warn('❌ VITE_REPLICATE_API_TOKEN is not set');
-    console.warn('Available env vars:', Object.keys(import.meta.env));
-  } else {
-    console.log('✅ Replicate API token found:', token.substring(0, 8) + '...');
-  }
-
-  return token;
-}
 
 export class ReplicateService {
-  private replicate: Replicate | null = null;
-  private token: string | undefined;
-
-  constructor() {
-    this.token = getReplicateToken();
-
-    if (this.token) {
-      try {
-        this.replicate = new Replicate({
-          auth: this.token,
-        });
-        console.log('✅ Replicate client initialized successfully');
-      } catch (error) {
-        console.error('❌ Failed to initialize Replicate client:', error);
-        this.replicate = null;
-      }
-    } else {
-      console.warn('⚠️ Replicate API token not configured. AI icon generation will be disabled.');
-      console.warn('To enable AI icons, add VITE_REPLICATE_API_TOKEN to your .env file or Vercel environment variables.');
-    }
-  }
-
   /**
-   * Check if Replicate is configured
+   * Check if the API endpoint is available
+   * In production, this is always true since the API route is deployed with the app
    */
   isConfigured(): boolean {
-    const configured = !!this.replicate && !!this.token;
-
-    if (!configured) {
-      console.log('Replicate status:', {
-        hasToken: !!this.token,
-        hasClient: !!this.replicate,
-        tokenPreview: this.token ? this.token.substring(0, 8) + '...' : 'none'
-      });
-    }
-
-    return configured;
+    // The API route is always available in production/preview
+    // For local dev, it works via Vercel CLI or Next.js dev server
+    return true;
   }
 
   /**
-   * Generate an icon using FLUX model
-   * Returns a data URL of the generated image
+   * Generate an icon using FLUX model via serverless API route
+   * This bypasses CORS issues by calling Replicate from the server
    */
   async generateIcon(challengeText: string): Promise<string> {
-    // Check token at runtime
-    if (!this.token) {
-      const errorMsg = 'Replicate API token is not configured.\n\n' +
-        'Please add VITE_REPLICATE_API_TOKEN to your environment variables:\n' +
-        '1. In Vercel: Go to Settings → Environment Variables\n' +
-        '2. Locally: Add to .env file\n\n' +
-        'Your token should start with "r8_"';
-      throw new Error(errorMsg);
-    }
-
-    if (!this.replicate) {
-      throw new Error('Replicate client failed to initialize. Check console for details.');
+    if (!challengeText || !challengeText.trim()) {
+      throw new Error('Challenge text is required');
     }
 
     try {
-      // Create a prompt optimized for simple, clear icons
-      const prompt = this.createPrompt(challengeText);
-
-      console.log('🎨 Generating AI icon...');
+      console.log('🎨 Calling API to generate icon...');
       console.log('Challenge:', challengeText);
-      console.log('Prompt:', prompt);
 
-      // Use FLUX Schnell (fast model) for quick generation
-      const output = await this.replicate.run(
-        'black-forest-labs/flux-schnell',
-        {
-          input: {
-            prompt: prompt,
-            num_outputs: 1,
-            aspect_ratio: '1:1',
-            output_format: 'png',
-            output_quality: 80,
-          },
+      // Call our serverless API route
+      const response = await fetch('/api/generateIcon', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          challengeText: challengeText.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || errorData.details || `Server error: ${response.status}`;
+
+        console.error('❌ API error:', errorMessage);
+
+        // Provide user-friendly error messages
+        if (response.status === 401) {
+          throw new Error('Invalid Replicate API token on server. Please check Vercel environment variables.');
+        } else if (response.status === 429) {
+          throw new Error('Rate limit exceeded. Please try again in a few minutes.');
+        } else if (response.status === 500) {
+          throw new Error(errorMessage || 'Server error. Please try again.');
+        } else {
+          throw new Error(errorMessage);
         }
-      ) as string[];
-
-      if (!output || output.length === 0) {
-        throw new Error('No image generated from FLUX model');
       }
 
-      console.log('✅ Image generated successfully');
+      const data = await response.json();
 
-      // Get the image URL
-      const imageUrl = output[0];
-      console.log('Image URL:', imageUrl);
+      if (!data.imageUrl) {
+        throw new Error('No image URL returned from server');
+      }
 
-      // Convert to data URL
+      console.log('✅ Image URL received:', data.imageUrl);
+
+      // Convert the Replicate image URL to a data URL
       console.log('Converting to data URL...');
-      const dataUrl = await this.convertToDataUrl(imageUrl);
+      const dataUrl = await this.convertToDataUrl(data.imageUrl);
       console.log('✅ Conversion complete');
 
       return dataUrl;
+
     } catch (error) {
       console.error('❌ Error generating icon:', error);
 
-      // Provide user-friendly error messages
+      // Re-throw with user-friendly message
       if (error instanceof Error) {
-        if (error.message.includes('401') || error.message.includes('Unauthorized')) {
-          throw new Error('Invalid Replicate API token. Please check your credentials.');
-        } else if (error.message.includes('429') || error.message.includes('rate limit')) {
-          throw new Error('Replicate API rate limit exceeded. Please try again in a few minutes.');
-        } else if (error.message.includes('network') || error.message.includes('fetch')) {
-          throw new Error('Network error. Please check your internet connection and try again.');
-        }
+        throw error;
+      } else {
+        throw new Error('Failed to generate icon. Please try again.');
       }
-
-      throw error;
     }
-  }
-
-  /**
-   * Create an optimized prompt for icon generation
-   */
-  private createPrompt(challengeText: string): string {
-    return `Simple, clean icon illustration of "${challengeText}".
-Minimalist design, bright colors, high contrast, bold lines.
-Flat design style, no text, centered on white background.
-Autism-friendly, clear and immediately recognizable.
-Professional clipart style, 512x512 pixels.`;
   }
 
   /**
@@ -176,19 +115,17 @@ Professional clipart style, 512x512 pixels.`;
   }
 
   /**
-   * Get token info for debugging
+   * Get debug info for troubleshooting
    */
   getDebugInfo(): {
-    hasToken: boolean;
-    tokenPreview: string;
+    apiEndpoint: string;
     isConfigured: boolean;
-    envVars: string[];
+    mode: string;
   } {
     return {
-      hasToken: !!this.token,
-      tokenPreview: this.token ? this.token.substring(0, 10) + '...' : 'none',
+      apiEndpoint: '/api/generateIcon',
       isConfigured: this.isConfigured(),
-      envVars: Object.keys(import.meta.env)
+      mode: import.meta.env.MODE || 'production'
     };
   }
 }

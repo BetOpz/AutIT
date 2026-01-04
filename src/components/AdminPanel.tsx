@@ -242,30 +242,20 @@ export const AdminPanel = ({
                     return (
                       <>
                         <div className="pl-6 space-y-1 text-gray-700">
-                          <div>Token: {debugInfo.hasToken ? debugInfo.tokenPreview : 'Missing'}</div>
-                          <div>Status: {debugInfo.isConfigured ? 'Ready' : 'Not Ready'}</div>
+                          <div>API Endpoint: {debugInfo.apiEndpoint}</div>
+                          <div>Mode: {debugInfo.mode}</div>
+                          <div>Status: {debugInfo.isConfigured ? 'Ready ✅' : 'Not Ready ❌'}</div>
                         </div>
 
-                        <div className="mt-4">
-                          <div className="font-bold mb-2">Available Environment Variables:</div>
-                          <div className="pl-6 space-y-1 text-gray-600 max-h-40 overflow-y-auto">
-                            {debugInfo.envVars.map((key) => (
-                              <div key={key}>• {key}</div>
-                            ))}
-                          </div>
+                        <div className="mt-4 p-4 bg-blue-100 border-2 border-blue-400 rounded-lg">
+                          <p className="font-bold text-blue-800 mb-2">ℹ️ Using Serverless API</p>
+                          <p className="text-sm text-blue-700">
+                            AI icon generation now uses a serverless API route to avoid CORS issues.
+                          </p>
+                          <p className="text-sm text-blue-700 mt-2">
+                            The Replicate API token is securely stored on the server (Vercel environment variables).
+                          </p>
                         </div>
-
-                        {!debugInfo.hasToken && (
-                          <div className="mt-4 p-4 bg-yellow-100 border-2 border-yellow-400 rounded-lg">
-                            <p className="font-bold text-yellow-800 mb-2">⚠️ Replicate Token Missing</p>
-                            <p className="text-sm text-yellow-700">
-                              Add <code className="bg-yellow-200 px-2 py-1 rounded">VITE_REPLICATE_API_TOKEN</code> to your .env file or Vercel environment variables.
-                            </p>
-                            <p className="text-sm text-yellow-700 mt-2">
-                              Expected: VITE_REPLICATE_API_TOKEN=r8_...
-                            </p>
-                          </div>
-                        )}
                       </>
                     );
                   })()}
@@ -275,10 +265,11 @@ export const AdminPanel = ({
               <div className="bg-blue-100 rounded-xl p-4">
                 <h3 className="text-lg font-bold mb-2">🔍 Troubleshooting</h3>
                 <ul className="list-disc list-inside space-y-1 text-sm">
-                  <li>Make sure your .env file has VITE_REPLICATE_API_TOKEN set</li>
-                  <li>Restart the development server after changing .env</li>
-                  <li>In Vercel, add environment variables in Settings → Environment Variables</li>
+                  <li>Icon generation now uses serverless API (/api/generateIcon)</li>
+                  <li>No CORS issues - API calls happen server-side</li>
+                  <li>In Vercel: Add VITE_REPLICATE_API_TOKEN to Environment Variables</li>
                   <li>Token should start with "r8_"</li>
+                  <li>Redeploy after adding environment variables</li>
                 </ul>
               </div>
             </div>
