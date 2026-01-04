@@ -237,20 +237,29 @@ export const AdminPanel = ({
     return iconUrl.startsWith('tabler:');
   };
 
+  // Helper to convert kebab-case to PascalCase
+  const kebabToPascal = (str: string): string => {
+    return str
+      .split('-')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join('');
+  };
+
   // Helper to render Tabler icon component
   const renderTablerIcon = (iconUrl: string, size: number = 64) => {
     if (!isTablerIcon(iconUrl)) return null;
 
     const iconName = iconUrl.replace('tabler:', '');
-    // Convert icon name to PascalCase for Tabler component (e.g., "target" -> "IconTarget")
-    const componentName = `Icon${iconName.charAt(0).toUpperCase()}${iconName.slice(1)}`;
+    // Convert kebab-case to PascalCase for Tabler component
+    // Example: "arrow-right" -> "IconArrowRight", "push-ups" -> "IconPushUps"
+    const componentName = `Icon${kebabToPascal(iconName)}`;
 
     // Get the icon component from Tabler
     const IconComponent = (TablerIcons as any)[componentName];
 
     if (!IconComponent) {
-      console.warn(`Tabler icon not found: ${componentName}`);
-      return <div className="text-red-500">Icon not found: {iconName}</div>;
+      console.warn(`Tabler icon not found: ${componentName} (from ${iconName})`);
+      return <div className="text-red-500 text-xs">Icon not found: {iconName}</div>;
     }
 
     return <IconComponent size={size} stroke={2} />;
