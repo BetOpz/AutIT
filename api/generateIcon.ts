@@ -41,6 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     // Initialize Replicate client
+    console.log('🔧 Initializing Replicate client...');
     const replicate = new Replicate({
       auth: apiToken,
     });
@@ -53,6 +54,7 @@ Autism-friendly, clear and immediately recognizable.
 Professional clipart style, 512x512 pixels.`;
 
     console.log('📝 Prompt:', prompt);
+    console.log('🚀 Calling Replicate API with model: black-forest-labs/flux-schnell');
 
     // Call Replicate FLUX Schnell model
     const output = await replicate.run(
@@ -68,12 +70,18 @@ Professional clipart style, 512x512 pixels.`;
       }
     ) as string[];
 
+    console.log('📦 Raw Replicate output:', JSON.stringify(output, null, 2));
+    console.log('📊 Output type:', typeof output);
+    console.log('📊 Output is array:', Array.isArray(output));
+    console.log('📊 Output length:', output?.length);
+
     if (!output || output.length === 0) {
       throw new Error('No image generated from FLUX model');
     }
 
     const imageUrl = output[0];
-    console.log('✅ Image generated:', imageUrl);
+    console.log('✅ Image generated successfully!');
+    console.log('🔗 Image URL:', imageUrl);
 
     // Return the image URL to the frontend
     return res.status(200).json({
@@ -83,16 +91,43 @@ Professional clipart style, 512x512 pixels.`;
     });
 
   } catch (error: any) {
-    console.error('❌ Error generating icon:', error);
+    console.error('❌ ========== ERROR DETAILS ==========');
+    console.error('Error type:', error?.constructor?.name);
+    console.error('Error message:', error?.message);
+    console.error('Error stack:', error?.stack);
 
-    // Provide detailed error information
+    // Log response details if available
+    if (error?.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response statusText:', error.response.statusText);
+      console.error('Response headers:', JSON.stringify(error.response.headers, null, 2));
+      console.error('Response data:', JSON.stringify(error.response.data, null, 2));
+    }
+
+    // Log request details if available
+    if (error?.config) {
+      console.error('Request URL:', error.config.url);
+      console.error('Request method:', error.config.method);
+      console.error('Request headers:', JSON.stringify(error.config.headers, null, 2));
+    }
+
+    // Log full error object for debugging
+    console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+    console.error('❌ ===================================');
+
+    // Provide detailed error information to client
     const errorMessage = error?.message || 'Unknown error';
+    const errorDetails = error?.response?.data?.detail || error?.response?.data || errorMessage;
     const statusCode = error?.response?.status || 500;
 
     return res.status(statusCode).json({
       error: 'Failed to generate icon',
-      details: errorMessage,
-      challengeText: challengeText
+      details: errorDetails,
+      message: errorMessage,
+      statusCode: statusCode,
+      challengeText: challengeText,
+      // Include error type for debugging
+      errorType: error?.constructor?.name || 'Unknown'
     });
   }
 }

@@ -40,9 +40,20 @@ export class ReplicateService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.error || errorData.details || `Server error: ${response.status}`;
 
-        console.error('❌ API error:', errorMessage);
+        console.error('❌ API error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData: errorData
+        });
+
+        // Extract detailed error message
+        const errorMessage = errorData.message || errorData.details || errorData.error || `Server error: ${response.status}`;
+        const errorType = errorData.errorType || 'Unknown';
+
+        console.error('Error type:', errorType);
+        console.error('Error message:', errorMessage);
+        console.error('Full error data:', JSON.stringify(errorData, null, 2));
 
         // Provide user-friendly error messages
         if (response.status === 401) {
@@ -50,9 +61,10 @@ export class ReplicateService {
         } else if (response.status === 429) {
           throw new Error('Rate limit exceeded. Please try again in a few minutes.');
         } else if (response.status === 500) {
-          throw new Error(errorMessage || 'Server error. Please try again.');
+          // Include detailed server error message
+          throw new Error(`Server error: ${errorMessage}`);
         } else {
-          throw new Error(errorMessage);
+          throw new Error(`API error (${response.status}): ${errorMessage}`);
         }
       }
 
