@@ -110,17 +110,18 @@ class TablerSearchService {
     const stopWords = new Set([
       'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
       'your', 'my', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'this', 'that',
-      'of', 'with', 'from', 'by', 'is', 'are', 'was', 'were', 'be', 'been',
-      'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should'
+      'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+      'be', 'have', 'do', 'is', 'are', 'was', 'were', 'of', 'off', 'more', 'must',
+      'bigger', 'than'
     ]);
 
-    // Split into words, lowercase, remove non-alphanumeric
     const words = text
       .toLowerCase()
       .split(/\s+/)
-      .map(word => word.replace(/[^a-z0-9-]/g, ''))
-      .filter(word => word.length > 2 && !stopWords.has(word));
+      .map(word => word.replace(/[^a-z]/g, ''))        // Only letters (remove numbers)
+      .filter(word => word.length > 3 && !stopWords.has(word)); // Min 4 chars
 
+    console.log('Keywords filtered:', words);
     return words;
   }
 
