@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Challenge } from '../types';
 import { generateId } from '../utils/storage';
-import { replicateService } from '../services/replicate.service';
+import { geminiService } from '../services/gemini.service';
+import * as TablerIcons from '@tabler/icons-react';
 
 interface AdminPanelProps {
   challenges: Challenge[];
@@ -17,6 +18,25 @@ const EMOJI_OPTIONS = [
   '🍽️', '📖', '✍️', '🎨', '🎵', '🌱', '☀️', '🌙', '⏰', '🎯',
   '🧩', '🎮', '📱', '💻', '🎧', '🎬', '📷', '🍕', '🥗', '☕',
 ];
+
+// Load custom AI-suggested icons from localStorage
+const loadCustomIcons = (): string[] => {
+  try {
+    const stored = localStorage.getItem('customIcons');
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+};
+
+// Save custom icons to localStorage
+const saveCustomIcons = (icons: string[]) => {
+  try {
+    localStorage.setItem('customIcons', JSON.stringify(icons));
+  } catch (error) {
+    console.error('Failed to save custom icons:', error);
+  }
+};
 
 export const AdminPanel = ({
   challenges,
@@ -40,6 +60,9 @@ export const AdminPanel = ({
   const [generatedIconPreview, setGeneratedIconPreview] = useState<string | null>(null);
   const [iconMode, setIconMode] = useState<'emoji' | 'ai'>('emoji');
   const [showDebugInfo, setShowDebugInfo] = useState(false);
+
+  // Custom AI-suggested icons (persisted in localStorage)
+  const [customIcons, setCustomIcons] = useState<string[]>(() => loadCustomIcons());
 
   const handleAddChallenge = () => {
     if (!newChallengeText.trim()) {
@@ -68,22 +91,31 @@ export const AdminPanel = ({
       return;
     }
 
-    if (!replicateService.isConfigured()) {
-      alert('AI Icon Generation is not configured. Please add VITE_REPLICATE_API_TOKEN to your .env file');
-      return;
-    }
-
     setIsGeneratingAI(true);
     setAiGenerationError(null);
 
     try {
-      const dataUrl = await replicateService.generateIcon(newChallengeText);
-      setGeneratedIconPreview(dataUrl);
-      setNewChallengeIcon(dataUrl);
+      // Get icon suggestion from Gemini
+      const iconName = await geminiService.suggestIcon(newChallengeText);
+      const tablerIconKey = `tabler:${iconName}`;
+
+      console.log('Suggested Tabler icon:', iconName);
+
+      // Store as "tabler:iconname" format
+      setGeneratedIconPreview(tablerIconKey);
+      setNewChallengeIcon(tablerIconKey);
       setIconMode('ai');
+
+      // Add to custom icons if not already there
+      if (!customIcons.includes(tablerIconKey)) {
+        const updated = [...customIcons, tablerIconKey];
+        setCustomIcons(updated);
+        saveCustomIcons(updated);
+        console.log('Added to custom icons:', tablerIconKey);
+      }
     } catch (error) {
-      console.error('AI generation error:', error);
-      setAiGenerationError(error instanceof Error ? error.message : 'Failed to generate icon');
+      console.error('AI icon suggestion error:', error);
+      setAiGenerationError(error instanceof Error ? error.message : 'Failed to suggest icon');
     } finally {
       setIsGeneratingAI(false);
     }
@@ -168,9 +200,28 @@ export const AdminPanel = ({
     setShowEmojiPicker(false);
   };
 
-  // Check if icon is AI generated (data URL) or emoji
-  const isAIIcon = (iconUrl: string): boolean => {
-    return iconUrl.startsWith('data:image/');
+  // Check if icon is AI-suggested Tabler icon or emoji
+  const isTablerIcon = (iconUrl: string): boolean => {
+    return iconUrl.startsWith('tabler:');
+  };
+
+  // Helper to render Tabler icon component
+  const renderTablerIcon = (iconUrl: string, size: number = 64) => {
+    if (!isTablerIcon(iconUrl)) return null;
+
+    const iconName = iconUrl.replace('tabler:', '');
+    // Convert icon name to PascalCase for Tabler component (e.g., "target" -> "IconTarget")
+    const componentName = `Icon${iconName.charAt(0).toUpperCase()}${iconName.slice(1)}`;
+
+    // Get the icon component from Tabler
+    const IconComponent = (TablerIcons as any)[componentName];
+
+    if (!IconComponent) {
+      console.warn(`Tabler icon not found: ${componentName}`);
+      return <div className="text-red-500">Icon not found: {iconName}</div>;
+    }
+
+    return <IconComponent size={size} stroke={2} />;
   };
 
   return (
@@ -228,30 +279,32 @@ export const AdminPanel = ({
                 <h3 className="text-2xl font-bold mb-3">Environment Status</h3>
                 <div className="space-y-2 font-mono text-sm">
                   <div className="flex items-center gap-2">
-                    <span className={replicateService.isConfigured() ? 'text-green-600' : 'text-red-600'}>
-                      {replicateService.isConfigured() ? '✅' : '❌'}
+                    <span className={geminiService.isConfigured() ? 'text-green-600' : 'text-red-600'}>
+                      {geminiService.isConfigured() ? '✅' : '❌'}
                     </span>
-                    <span className="font-bold">Replicate API:</span>
-                    <span>{replicateService.isConfigured() ? 'Configured' : 'Not Configured'}</span>
+                    <span className="font-bold">Gemini API:</span>
+                    <span>{geminiService.isConfigured() ? 'Configured' : 'Not Configured'}</span>
                   </div>
 
                   {(() => {
-                    const debugInfo = replicateService.getDebugInfo();
+                    const debugInfo = geminiService.getDebugInfo();
                     return (
                       <>
                         <div className="pl-6 space-y-1 text-gray-700">
                           <div>API Endpoint: {debugInfo.apiEndpoint}</div>
+                          <div>Service: {debugInfo.service}</div>
                           <div>Mode: {debugInfo.mode}</div>
+                          <div>Custom Icons: {customIcons.length}</div>
                           <div>Status: {debugInfo.isConfigured ? 'Ready ✅' : 'Not Ready ❌'}</div>
                         </div>
 
                         <div className="mt-4 p-4 bg-blue-100 border-2 border-blue-400 rounded-lg">
-                          <p className="font-bold text-blue-800 mb-2">ℹ️ Using Serverless API</p>
+                          <p className="font-bold text-blue-800 mb-2">ℹ️ Google Gemini + Tabler Icons</p>
                           <p className="text-sm text-blue-700">
-                            AI icon generation now uses a serverless API route to avoid CORS issues.
+                            AI-powered icon suggestions using Google Gemini API with Tabler Icons library.
                           </p>
                           <p className="text-sm text-blue-700 mt-2">
-                            The Replicate API token is securely stored on the server (Vercel environment variables).
+                            Suggested icons are automatically added to your icon picker for reuse.
                           </p>
                         </div>
                       </>
@@ -261,13 +314,13 @@ export const AdminPanel = ({
               </div>
 
               <div className="bg-blue-100 rounded-xl p-4">
-                <h3 className="text-lg font-bold mb-2">🔍 Troubleshooting</h3>
+                <h3 className="text-lg font-bold mb-2">🔍 How It Works</h3>
                 <ul className="list-disc list-inside space-y-1 text-sm">
-                  <li>Icon generation now uses serverless API (/api/generateIcon)</li>
-                  <li>No CORS issues - API calls happen server-side</li>
-                  <li>In Vercel: Add VITE_REPLICATE_API_TOKEN to Environment Variables</li>
-                  <li>Token should start with "r8_"</li>
-                  <li>Redeploy after adding environment variables</li>
+                  <li>Enter a challenge description and click "Generate AI Icon"</li>
+                  <li>Gemini suggests the best Tabler icon for your challenge</li>
+                  <li>The icon is automatically added to your icon picker</li>
+                  <li>Reuse suggested icons without calling the API again</li>
+                  <li>Custom icons are saved in your browser for future use</li>
                 </ul>
               </div>
             </div>
@@ -340,6 +393,27 @@ export const AdminPanel = ({
                   {showEmojiPicker && (
                     <div className="bg-gray-100 rounded-xl p-4">
                       <p className="text-base sm:text-lg font-bold mb-3">Select an icon:</p>
+
+                      {/* Custom AI-suggested icons */}
+                      {customIcons.length > 0 && (
+                        <div className="mb-4">
+                          <p className="text-sm font-bold text-purple-600 mb-2">🤖 AI-Suggested Icons:</p>
+                          <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-10 gap-2 sm:gap-3">
+                            {customIcons.map((iconKey) => (
+                              <button
+                                key={iconKey}
+                                onClick={() => handleEmojiSelect(iconKey)}
+                                className="flex items-center justify-center hover:bg-gray-200 rounded-lg p-3 transition-colors min-h-[64px] min-w-[64px] active:scale-95 bg-white border-2 border-purple-200"
+                              >
+                                {renderTablerIcon(iconKey, 32)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Standard emojis */}
+                      <p className="text-sm font-bold text-gray-600 mb-2">😊 Standard Emojis:</p>
                       <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-10 gap-2 sm:gap-3">
                         {EMOJI_OPTIONS.map((emoji) => (
                           <button
@@ -387,11 +461,12 @@ export const AdminPanel = ({
                   {generatedIconPreview && (
                     <div className="bg-gray-100 rounded-xl p-4 sm:p-6">
                       <div className="text-center mb-4">
-                        <img
-                          src={generatedIconPreview}
-                          alt="Generated icon"
-                          className="w-48 h-48 sm:w-64 sm:h-64 mx-auto rounded-xl shadow-lg object-cover"
-                        />
+                        <div className="inline-flex items-center justify-center bg-white rounded-2xl p-8 shadow-lg">
+                          {renderTablerIcon(generatedIconPreview, 128)}
+                        </div>
+                        <p className="text-sm text-gray-600 mt-3">
+                          Icon: {generatedIconPreview.replace('tabler:', '')}
+                        </p>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-3">
                         <button
@@ -455,12 +530,10 @@ export const AdminPanel = ({
                     // Edit mode
                     <div className="space-y-4">
                       <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
-                        {isAIIcon(editIcon) ? (
-                          <img
-                            src={editIcon}
-                            alt="Challenge icon"
-                            className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover"
-                          />
+                        {isTablerIcon(editIcon) ? (
+                          <div className="flex items-center justify-center bg-white rounded-xl p-4 border-2 border-gray-300">
+                            {renderTablerIcon(editIcon, 64)}
+                          </div>
                         ) : (
                           <div className="text-5xl sm:text-6xl">{editIcon}</div>
                         )}
@@ -503,12 +576,10 @@ export const AdminPanel = ({
                     <div className="space-y-4">
                       {/* Icon and Text Section */}
                       <div className="flex items-center gap-3 sm:gap-4">
-                        {isAIIcon(challenge.iconUrl) ? (
-                          <img
-                            src={challenge.iconUrl}
-                            alt={challenge.text}
-                            className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl object-cover flex-shrink-0"
-                          />
+                        {isTablerIcon(challenge.iconUrl) ? (
+                          <div className="flex items-center justify-center bg-white rounded-xl p-3 border-2 border-purple-200 flex-shrink-0">
+                            {renderTablerIcon(challenge.iconUrl, 48)}
+                          </div>
                         ) : (
                           <div className="text-5xl sm:text-6xl flex-shrink-0">{challenge.iconUrl}</div>
                         )}
@@ -516,7 +587,7 @@ export const AdminPanel = ({
                         <div className="flex-grow min-w-0">
                           <p className="text-lg sm:text-2xl font-bold break-words leading-tight">{challenge.text}</p>
                           <p className="text-sm sm:text-base text-gray-500 mt-1">
-                            Order: {challenge.order} • {isAIIcon(challenge.iconUrl) ? '🤖 AI' : '😊 Emoji'}
+                            Order: {challenge.order} • {isTablerIcon(challenge.iconUrl) ? '🤖 AI Icon' : '😊 Emoji'}
                           </p>
                         </div>
                       </div>

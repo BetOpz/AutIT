@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Challenge, ChallengeSession, Session } from '../types';
 import { Fireworks } from './Fireworks';
 import { generateId } from '../utils/storage';
+import * as TablerIcons from '@tabler/icons-react';
 
 interface UserModeProps {
   challenges: Challenge[];
@@ -20,9 +21,28 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
   const currentChallenge = challenges[currentIndex];
   const isLastChallenge = currentIndex === challenges.length - 1;
 
-  // Check if icon is AI generated (data URL) or emoji
-  const isAIIcon = (iconUrl: string): boolean => {
-    return iconUrl.startsWith('data:image/');
+  // Check if icon is AI-suggested Tabler icon or emoji
+  const isTablerIcon = (iconUrl: string): boolean => {
+    return iconUrl.startsWith('tabler:');
+  };
+
+  // Helper to render Tabler icon component
+  const renderTablerIcon = (iconUrl: string, size: number = 64) => {
+    if (!isTablerIcon(iconUrl)) return null;
+
+    const iconName = iconUrl.replace('tabler:', '');
+    // Convert icon name to PascalCase for Tabler component (e.g., "target" -> "IconTarget")
+    const componentName = `Icon${iconName.charAt(0).toUpperCase()}${iconName.slice(1)}`;
+
+    // Get the icon component from Tabler
+    const IconComponent = (TablerIcons as any)[componentName];
+
+    if (!IconComponent) {
+      console.warn(`Tabler icon not found: ${componentName}`);
+      return null;
+    }
+
+    return <IconComponent size={size} stroke={2} />;
   };
 
   // Timer logic
@@ -153,12 +173,10 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     {/* Icon and text */}
                     <div className="flex items-center gap-3 md:gap-4">
-                      {challenge && isAIIcon(challenge.iconUrl) ? (
-                        <img
-                          src={challenge.iconUrl}
-                          alt={challenge.text}
-                          className="w-20 h-20 md:w-24 md:h-24 rounded-xl object-cover flex-shrink-0"
-                        />
+                      {challenge && isTablerIcon(challenge.iconUrl) ? (
+                        <div className="flex items-center justify-center bg-white rounded-xl p-2 md:p-3 border-2 border-purple-200 flex-shrink-0">
+                          {renderTablerIcon(challenge.iconUrl, 64)}
+                        </div>
                       ) : (
                         <span className="text-6xl md:text-7xl flex-shrink-0">{challenge?.iconUrl}</span>
                       )}
@@ -226,12 +244,10 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
 
         {/* Challenge icon - Extra large on mobile for autism-friendly design */}
         <div className="flex justify-center mb-6 md:mb-8">
-          {isAIIcon(currentChallenge.iconUrl) ? (
-            <img
-              src={currentChallenge.iconUrl}
-              alt={currentChallenge.text}
-              className="w-56 h-56 sm:w-64 sm:h-64 md:w-80 md:h-80 rounded-3xl shadow-2xl object-cover"
-            />
+          {isTablerIcon(currentChallenge.iconUrl) ? (
+            <div className="flex items-center justify-center bg-white rounded-3xl shadow-2xl p-12 sm:p-16 md:p-20 border-4 border-purple-200">
+              {renderTablerIcon(currentChallenge.iconUrl, 200)}
+            </div>
           ) : (
             <div className="text-8xl sm:text-9xl md:text-[12rem] leading-none">{currentChallenge.iconUrl}</div>
           )}

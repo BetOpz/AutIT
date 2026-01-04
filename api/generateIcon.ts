@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import Replicate from 'replicate';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow POST requests
@@ -7,24 +7,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Get the API token from environment variables
-  // Note: Server-side uses REPLICATE_API_KEY (no VITE_ prefix)
-  // VITE_ prefix is only for client-side code processed by Vite
-  const apiToken = process.env.REPLICATE_API_KEY;
+  // Get the Firebase API key (works with Gemini too)
+  const apiKey = process.env.VITE_FIREBASE_API_KEY;
 
-  console.log('🔍 Checking for Replicate API token...');
-  console.log('Token exists:', !!apiToken);
-  if (apiToken) {
-    console.log('Token starts with r8_:', apiToken.startsWith('r8_'));
-    console.log('Token length:', apiToken.length);
-  }
+  console.log('🔍 Checking for API key...');
+  console.log('API key exists:', !!apiKey);
 
-  if (!apiToken) {
-    console.error('❌ REPLICATE_API_KEY not found in environment');
-    console.error('Available env vars:', Object.keys(process.env).filter(k => k.includes('REPLICATE')));
+  if (!apiKey) {
+    console.error('❌ VITE_FIREBASE_API_KEY not found in environment');
     return res.status(500).json({
-      error: 'Replicate API token not configured on server',
-      details: 'Add REPLICATE_API_KEY (no VITE_ prefix) to Vercel environment variables'
+      error: 'API key not configured on server',
+      details: 'Add VITE_FIREBASE_API_KEY to Vercel environment variables'
     });
   }
 
@@ -37,56 +30,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  console.log('🎨 Generating icon for:', challengeText);
+  console.log('🎨 Suggesting Tabler icon for:', challengeText);
 
   try {
-    // Initialize Replicate client
-    console.log('🔧 Initializing Replicate client...');
-    const replicate = new Replicate({
-      auth: apiToken,
-    });
+    // Initialize Gemini
+    console.log('🔧 Initializing Google Gemini...');
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
 
-    // Create optimized prompt for autism-friendly icons
-    const prompt = `Simple, clean icon illustration of "${challengeText}".
-Minimalist design, bright colors, high contrast, bold lines.
-Flat design style, no text, centered on white background.
-Autism-friendly, clear and immediately recognizable.
-Professional clipart style, 512x512 pixels.`;
+    // Create prompt for Gemini to suggest Tabler icon
+    const prompt = `You are an icon suggestion assistant. Given a challenge or task description, suggest the most appropriate Tabler icon name.
+
+Challenge: "${challengeText}"
+
+Instructions:
+- Respond with ONLY the Tabler icon name (e.g., "target", "run", "apple", "book")
+- Use simple, common icon names from the Tabler Icons library
+- No prefix, no explanation, just the icon name
+- Choose icons that are clear and recognizable
+- For activities: use action-related icons (run, walk, yoga, meditation)
+- For objects: use object icons (apple, book, tooth, bed)
+- For abstract concepts: use symbolic icons (target, star, heart, brain)
+
+Icon name:`;
 
     console.log('📝 Prompt:', prompt);
-    console.log('🚀 Calling Replicate API with model: black-forest-labs/flux-schnell');
+    console.log('🚀 Calling Google Gemini API...');
 
-    // Call Replicate FLUX Schnell model
-    const output = await replicate.run(
-      'black-forest-labs/flux-schnell',
-      {
-        input: {
-          prompt: prompt,
-          num_outputs: 1,
-          aspect_ratio: '1:1',
-          output_format: 'png',
-          output_quality: 80,
-        },
-      }
-    ) as string[];
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    const iconName = response.text().trim().toLowerCase();
 
-    console.log('📦 Raw Replicate output:', JSON.stringify(output, null, 2));
-    console.log('📊 Output type:', typeof output);
-    console.log('📊 Output is array:', Array.isArray(output));
-    console.log('📊 Output length:', output?.length);
+    console.log('📦 Gemini response:', iconName);
 
-    if (!output || output.length === 0) {
-      throw new Error('No image generated from FLUX model');
+    // Validate icon name (basic check)
+    if (!iconName || iconName.length > 50 || iconName.includes(' ')) {
+      throw new Error(`Invalid icon name returned: ${iconName}`);
     }
 
-    const imageUrl = output[0];
-    console.log('✅ Image generated successfully!');
-    console.log('🔗 Image URL:', imageUrl);
+    console.log('✅ Icon suggestion successful!');
+    console.log('🎯 Suggested icon:', iconName);
 
-    // Return the image URL to the frontend
+    // Return the Tabler icon name
     return res.status(200).json({
       success: true,
-      imageUrl: imageUrl,
+      iconName: iconName,
       challengeText: challengeText
     });
 
@@ -99,34 +87,21 @@ Professional clipart style, 512x512 pixels.`;
     // Log response details if available
     if (error?.response) {
       console.error('Response status:', error.response.status);
-      console.error('Response statusText:', error.response.statusText);
-      console.error('Response headers:', JSON.stringify(error.response.headers, null, 2));
       console.error('Response data:', JSON.stringify(error.response.data, null, 2));
     }
 
-    // Log request details if available
-    if (error?.config) {
-      console.error('Request URL:', error.config.url);
-      console.error('Request method:', error.config.method);
-      console.error('Request headers:', JSON.stringify(error.config.headers, null, 2));
-    }
-
-    // Log full error object for debugging
     console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
     console.error('❌ ===================================');
 
     // Provide detailed error information to client
     const errorMessage = error?.message || 'Unknown error';
-    const errorDetails = error?.response?.data?.detail || error?.response?.data || errorMessage;
     const statusCode = error?.response?.status || 500;
 
     return res.status(statusCode).json({
-      error: 'Failed to generate icon',
-      details: errorDetails,
-      message: errorMessage,
+      error: 'Failed to suggest icon',
+      details: errorMessage,
       statusCode: statusCode,
       challengeText: challengeText,
-      // Include error type for debugging
       errorType: error?.constructor?.name || 'Unknown'
     });
   }
