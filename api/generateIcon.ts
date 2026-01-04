@@ -8,13 +8,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Get the API token from environment variables
-  const apiToken = process.env.VITE_REPLICATE_API_TOKEN;
+  // Note: Using VITE_REPLICATE_API_KEY (not TOKEN) to match Vercel config
+  const apiToken = process.env.VITE_REPLICATE_API_KEY;
+
+  console.log('🔍 Checking for Replicate API token...');
+  console.log('Token exists:', !!apiToken);
+  if (apiToken) {
+    console.log('Token starts with r8_:', apiToken.startsWith('r8_'));
+    console.log('Token length:', apiToken.length);
+  }
 
   if (!apiToken) {
-    console.error('❌ VITE_REPLICATE_API_TOKEN not found in environment');
+    console.error('❌ VITE_REPLICATE_API_KEY not found in environment');
+    console.error('Available env vars:', Object.keys(process.env).filter(k => k.includes('REPLICATE')));
     return res.status(500).json({
       error: 'Replicate API token not configured on server',
-      details: 'Please add VITE_REPLICATE_API_TOKEN to Vercel environment variables'
+      details: 'Please add VITE_REPLICATE_API_KEY to Vercel environment variables'
     });
   }
 
