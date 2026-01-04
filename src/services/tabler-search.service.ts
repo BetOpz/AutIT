@@ -137,51 +137,49 @@ class TablerSearchService {
     const keywords = this.extractKeywords(challengeText);
 
     if (keywords.length === 0) {
+      console.log('No keywords found');
       return [];
     }
 
-    console.log('Keywords extracted:', keywords);
+    console.log('Searching with keywords:', keywords);
 
     // Score each icon based on keyword matches
-    const scored = this.iconList.map(icon => {
-      let score = 0;
+    const scored = this.iconList
+      .map(icon => {
+        let score = 0;
 
-      keywords.forEach(keyword => {
-        // Exact match (highest priority)
-        if (icon === keyword) {
-          score += 100;
-        }
-        // Icon contains keyword
-        else if (icon.includes(keyword)) {
-          score += 50;
-        }
-        // Keyword contains icon name
-        else if (keyword.includes(icon)) {
-          score += 25;
-        }
-        // Check for partial word matches in multi-word icons
-        const iconParts = icon.split('-');
-        iconParts.forEach(part => {
-          if (part === keyword) {
-            score += 75;
-          } else if (part.includes(keyword) || keyword.includes(part)) {
+        keywords.forEach(keyword => {
+          // Exact match = highest score
+          if (icon === keyword) {
+            score += 1000;
+          }
+          // Icon contains keyword as whole word (split by dash)
+          else if (icon.split('-').includes(keyword)) {
+            score += 100;
+          }
+          // Keyword starts icon name
+          else if (icon.startsWith(keyword)) {
+            score += 50;
+          }
+          // Icon starts with keyword
+          else if (keyword.startsWith(icon)) {
+            score += 25;
+          }
+          // Only substring match if keyword is long enough
+          else if (icon.includes(keyword) && keyword.length > 4) {
             score += 10;
           }
         });
-      });
 
-      return { name: icon, score };
-    });
-
-    // Sort by score and return top N
-    const results = scored
+        return { name: icon, score };
+      })
       .filter(item => item.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, maxResults);
 
-    console.log('Top matches:', results);
+    console.log('Top matches:', scored);
 
-    return results;
+    return scored;
   }
 
   /**
