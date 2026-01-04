@@ -31,10 +31,8 @@ export const AdminPanel = ({
   const [editText, setEditText] = useState('');
   const [editIcon, setEditIcon] = useState('');
   const [newChallengeText, setNewChallengeText] = useState('');
-  const [newChallengeIcon, setNewChallengeIcon] = useState('🎯');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [emojiPickerFor, setEmojiPickerFor] = useState<'new' | 'edit'>('new');
 
   const handleAddChallenge = () => {
     if (!newChallengeText.trim()) {
@@ -55,7 +53,6 @@ export const AdminPanel = ({
 
     onUpdateChallenges([...challenges, newChallenge]);
     setNewChallengeText('');
-    setNewChallengeIcon('🎯');
   };
 
   const handleStartEdit = (challenge: Challenge) => {
@@ -118,11 +115,7 @@ export const AdminPanel = ({
   };
 
   const handleEmojiSelect = (emoji: string) => {
-    if (emojiPickerFor === 'new') {
-      setNewChallengeIcon(emoji);
-    } else {
-      setEditIcon(emoji);
-    }
+    setEditIcon(emoji);
     setShowEmojiPicker(false);
   };
 
@@ -241,17 +234,14 @@ export const AdminPanel = ({
                       <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
                         <div className="text-5xl sm:text-6xl">{editIcon}</div>
                         <button
-                          onClick={() => {
-                            setEmojiPickerFor('edit');
-                            setShowEmojiPicker(!showEmojiPicker);
-                          }}
+                          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                           className="w-full sm:w-auto bg-gray-200 text-gray-900 px-4 py-3 rounded-lg text-base font-bold hover:bg-gray-300 transition-colors min-h-[48px]"
                         >
                           Change Icon
                         </button>
                       </div>
 
-                      {showEmojiPicker && emojiPickerFor === 'edit' && (
+                      {showEmojiPicker && (
                         <div className="bg-gray-100 rounded-xl p-4 mb-4">
                           <p className="text-base sm:text-lg font-bold mb-3">Select an icon:</p>
                           <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-10 gap-2 sm:gap-3">
