@@ -17,28 +17,80 @@ class TablerSearchService {
   private initialized: boolean = false;
 
   /**
-   * Initialize the icon list from Tabler Icons package
+   * Initialize the icon list from official Tabler Icons GitHub
    */
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
     try {
-      // Get all Tabler icon names from the imported package
-      // Icon components are named like "IconHome", "IconUser", etc.
-      this.iconList = Object.keys(TablerIcons)
-        .filter(key => key.startsWith('Icon'))
-        .map(key => {
-          // Convert "IconHome" to "home"
-          const name = key.replace('Icon', '');
-          return this.camelToKebab(name);
-        });
+      // Try to load from GitHub first (official source)
+      await this.loadFromGitHub();
+
+      // Fallback to package if GitHub fails
+      if (this.iconList.length === 0) {
+        this.loadFromPackage();
+      }
 
       console.log(`✅ Loaded ${this.iconList.length} Tabler icons`);
       this.initialized = true;
     } catch (error) {
       console.error('Failed to load Tabler icons:', error);
+      // Fallback to package method
+      this.loadFromPackage();
+      this.initialized = true;
+    }
+  }
+
+  /**
+   * Load icon list from official Tabler GitHub
+   */
+  private async loadFromGitHub(): Promise<void> {
+    try {
+      const response = await fetch(
+        'https://raw.githubusercontent.com/tabler/tabler-icons/master/icons.json',
+        { cache: 'force-cache' } // Cache for better performance
+      );
+
+      if (!response.ok) {
+        throw new Error(`GitHub fetch failed: ${response.status}`);
+      }
+
+      const icons = await response.json();
+
+      // Normalize icon names: IconRelation-one-to-one → relation-one-to-one
+      this.iconList = icons.map((icon: any) => {
+        let name = icon.name || icon;
+        // Remove 'Icon' prefix and convert to proper kebab-case
+        return name
+          .replace(/^Icon/, '')                    // Remove Icon prefix
+          .replace(/([A-Z])/g, '-$1')              // Add dash before capitals
+          .toLowerCase()                           // Convert to lowercase
+          .replace(/^-/, '')                       // Remove leading dash
+          .replace(/--+/g, '-');                   // Clean up multiple dashes
+      });
+
+      console.log('✅ Loaded icons from GitHub');
+    } catch (error) {
+      console.warn('GitHub load failed, using package fallback:', error);
       this.iconList = [];
     }
+  }
+
+  /**
+   * Fallback: Load from package (less reliable but works offline)
+   */
+  private loadFromPackage(): void {
+    // Get all Tabler icon names from the imported package
+    // Icon components are named like "IconHome", "IconUser", etc.
+    this.iconList = Object.keys(TablerIcons)
+      .filter(key => key.startsWith('Icon'))
+      .map(key => {
+        // Convert "IconHome" to "home"
+        const name = key.replace('Icon', '');
+        return this.camelToKebab(name);
+      });
+
+    console.log('✅ Loaded icons from package');
   }
 
   /**
