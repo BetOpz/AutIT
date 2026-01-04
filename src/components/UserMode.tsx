@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Challenge, ChallengeSession, Session } from '../types';
 import { Fireworks } from './Fireworks';
 import { generateId } from '../utils/storage';
-import * as TablerIcons from '@tabler/icons-react';
 
 interface UserModeProps {
   challenges: Challenge[];
@@ -20,39 +19,6 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
 
   const currentChallenge = challenges[currentIndex];
   const isLastChallenge = currentIndex === challenges.length - 1;
-
-  // Check if icon is AI-suggested Tabler icon or emoji
-  const isTablerIcon = (iconUrl: string): boolean => {
-    return iconUrl.startsWith('tabler:');
-  };
-
-  // Helper to convert kebab-case to PascalCase
-  const kebabToPascal = (str: string): string => {
-    return str
-      .split('-')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join('');
-  };
-
-  // Helper to render Tabler icon component
-  const renderTablerIcon = (iconUrl: string, size: number = 64) => {
-    if (!isTablerIcon(iconUrl)) return null;
-
-    const iconName = iconUrl.replace('tabler:', '');
-    // Convert kebab-case to PascalCase for Tabler component
-    // Example: "arrow-right" -> "IconArrowRight", "push-ups" -> "IconPushUps"
-    const componentName = `Icon${kebabToPascal(iconName)}`;
-
-    // Get the icon component from Tabler
-    const IconComponent = (TablerIcons as any)[componentName];
-
-    if (!IconComponent) {
-      console.warn(`Tabler icon not found: ${componentName} (from ${iconName})`);
-      return null;
-    }
-
-    return <IconComponent size={size} stroke={2} />;
-  };
 
   // Timer logic
   useEffect(() => {
@@ -182,13 +148,7 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     {/* Icon and text */}
                     <div className="flex items-center gap-3 md:gap-4">
-                      {challenge && isTablerIcon(challenge.iconUrl) ? (
-                        <div className="flex items-center justify-center bg-white rounded-xl p-2 md:p-3 border-2 border-purple-200 flex-shrink-0">
-                          {renderTablerIcon(challenge.iconUrl, 64)}
-                        </div>
-                      ) : (
-                        <span className="text-6xl md:text-7xl flex-shrink-0">{challenge?.iconUrl}</span>
-                      )}
+                      <span className="text-6xl md:text-7xl flex-shrink-0">{challenge?.iconUrl}</span>
                       <div className="flex-1 min-w-0">
                         <p className="text-lg md:text-2xl font-bold leading-tight break-words">
                           {challenge?.text}
@@ -253,13 +213,9 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
 
         {/* Challenge icon - Extra large on mobile for autism-friendly design */}
         <div className="flex justify-center mb-6 md:mb-8">
-          {isTablerIcon(currentChallenge.iconUrl) ? (
-            <div className="flex items-center justify-center bg-white rounded-3xl shadow-2xl p-12 sm:p-16 md:p-20 border-4 border-purple-200">
-              {renderTablerIcon(currentChallenge.iconUrl, 200)}
-            </div>
-          ) : (
-            <div className="text-8xl sm:text-9xl md:text-[12rem] leading-none">{currentChallenge.iconUrl}</div>
-          )}
+          <span style={{ fontSize: '200px', display: 'block', lineHeight: '1' }}>
+            {currentChallenge.iconUrl}
+          </span>
         </div>
 
         {/* Challenge text - Larger, more readable on mobile */}

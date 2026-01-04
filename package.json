@@ -10,8 +10,6 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.21.0",
-    "@tabler/icons-react": "^3.23.0",
     "firebase": "^12.7.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
