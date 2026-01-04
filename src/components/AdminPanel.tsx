@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Challenge } from '../types';
 import { generateId } from '../utils/storage';
-import { geminiService } from '../services/gemini.service';
+import { tablerSearchService } from '../services/tabler-search.service';
 import * as TablerIcons from '@tabler/icons-react';
 
 interface AdminPanelProps {
@@ -64,6 +64,26 @@ export const AdminPanel = ({
   // Custom AI-suggested icons (persisted in localStorage)
   const [customIcons, setCustomIcons] = useState<string[]>(() => loadCustomIcons());
 
+  // Icon suggestions
+  const [iconSuggestions, setIconSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  // Initialize Tabler search service
+  useEffect(() => {
+    tablerSearchService.initialize();
+  }, []);
+
+  // Auto-suggest icons when challenge text changes
+  useEffect(() => {
+    if (newChallengeText.trim().length > 3 && iconMode === 'ai') {
+      const suggestions = tablerSearchService.findMatchingIcons(newChallengeText, 5);
+      setIconSuggestions(suggestions.map(s => s.name));
+      setShowSuggestions(suggestions.length > 0);
+    } else {
+      setShowSuggestions(false);
+    }
+  }, [newChallengeText, iconMode]);
+
   const handleAddChallenge = () => {
     if (!newChallengeText.trim()) {
       alert('Please enter challenge text');
@@ -85,37 +105,49 @@ export const AdminPanel = ({
     setIconMode('emoji');
   };
 
+  const handleSelectSuggestion = (iconName: string) => {
+    const tablerIconKey = `tabler:${iconName}`;
+
+    console.log('Selected icon:', iconName);
+
+    // Store as "tabler:iconname" format
+    setGeneratedIconPreview(tablerIconKey);
+    setNewChallengeIcon(tablerIconKey);
+    setIconMode('ai');
+
+    // Add to custom icons if not already there
+    if (!customIcons.includes(tablerIconKey)) {
+      const updated = [...customIcons, tablerIconKey];
+      setCustomIcons(updated);
+      saveCustomIcons(updated);
+      console.log('Added to custom icons:', tablerIconKey);
+    }
+
+    setShowSuggestions(false);
+  };
+
   const handleGenerateAIIcon = async () => {
     if (!newChallengeText.trim()) {
       alert('Please enter challenge text first');
       return;
     }
 
+    // Use local search instead of API
     setIsGeneratingAI(true);
     setAiGenerationError(null);
 
     try {
-      // Get icon suggestion from Gemini
-      const iconName = await geminiService.suggestIcon(newChallengeText);
-      const tablerIconKey = `tabler:${iconName}`;
+      const suggestions = tablerSearchService.findMatchingIcons(newChallengeText, 1);
 
-      console.log('Suggested Tabler icon:', iconName);
-
-      // Store as "tabler:iconname" format
-      setGeneratedIconPreview(tablerIconKey);
-      setNewChallengeIcon(tablerIconKey);
-      setIconMode('ai');
-
-      // Add to custom icons if not already there
-      if (!customIcons.includes(tablerIconKey)) {
-        const updated = [...customIcons, tablerIconKey];
-        setCustomIcons(updated);
-        saveCustomIcons(updated);
-        console.log('Added to custom icons:', tablerIconKey);
+      if (suggestions.length === 0) {
+        throw new Error('No matching icons found. Try different keywords.');
       }
+
+      // Auto-select the best match
+      handleSelectSuggestion(suggestions[0].name);
     } catch (error) {
-      console.error('AI icon suggestion error:', error);
-      setAiGenerationError(error instanceof Error ? error.message : 'Failed to suggest icon');
+      console.error('Icon search error:', error);
+      setAiGenerationError(error instanceof Error ? error.message : 'Failed to find matching icon');
     } finally {
       setIsGeneratingAI(false);
     }
@@ -278,49 +310,48 @@ export const AdminPanel = ({
               <div className="bg-gray-100 rounded-xl p-4">
                 <h3 className="text-2xl font-bold mb-3">Environment Status</h3>
                 <div className="space-y-2 font-mono text-sm">
+                  {/* Local Tabler Search */}
                   <div className="flex items-center gap-2">
-                    <span className={geminiService.isConfigured() ? 'text-green-600' : 'text-red-600'}>
-                      {geminiService.isConfigured() ? '✅' : '❌'}
+                    <span className={tablerSearchService.isReady() ? 'text-green-600' : 'text-yellow-600'}>
+                      {tablerSearchService.isReady() ? '✅' : '⏳'}
                     </span>
-                    <span className="font-bold">Gemini API:</span>
-                    <span>{geminiService.isConfigured() ? 'Configured' : 'Not Configured'}</span>
+                    <span className="font-bold">Tabler Search:</span>
+                    <span>{tablerSearchService.isReady() ? 'Ready (5,000+ icons)' : 'Loading...'}</span>
                   </div>
 
-                  {(() => {
-                    const debugInfo = geminiService.getDebugInfo();
-                    return (
-                      <>
-                        <div className="pl-6 space-y-1 text-gray-700">
-                          <div>API Endpoint: {debugInfo.apiEndpoint}</div>
-                          <div>Service: {debugInfo.service}</div>
-                          <div>Mode: {debugInfo.mode}</div>
-                          <div>Custom Icons: {customIcons.length}</div>
-                          <div>Status: {debugInfo.isConfigured ? 'Ready ✅' : 'Not Ready ❌'}</div>
-                        </div>
+                  {/* Gemini API (backup) */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400">💤</span>
+                    <span className="font-bold">Gemini API:</span>
+                    <span className="text-gray-500">Available (not currently used)</span>
+                  </div>
 
-                        <div className="mt-4 p-4 bg-blue-100 border-2 border-blue-400 rounded-lg">
-                          <p className="font-bold text-blue-800 mb-2">ℹ️ Google Gemini + Tabler Icons</p>
-                          <p className="text-sm text-blue-700">
-                            AI-powered icon suggestions using Google Gemini API with Tabler Icons library.
-                          </p>
-                          <p className="text-sm text-blue-700 mt-2">
-                            Suggested icons are automatically added to your icon picker for reuse.
-                          </p>
-                        </div>
-                      </>
-                    );
-                  })()}
+                  <div className="pl-6 space-y-1 text-gray-700 mt-3">
+                    <div>Search Mode: Local keyword matching</div>
+                    <div>Custom Icons: {customIcons.length}</div>
+                    <div>API Calls: None (100% local)</div>
+                  </div>
+
+                  <div className="mt-4 p-4 bg-green-100 border-2 border-green-400 rounded-lg">
+                    <p className="font-bold text-green-800 mb-2">⚡ Local Tabler Icon Search</p>
+                    <p className="text-sm text-green-700">
+                      Smart keyword matching across 5,000+ Tabler icons - no API calls needed!
+                    </p>
+                    <p className="text-sm text-green-700 mt-2">
+                      Type your challenge and get instant icon suggestions as you type.
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-blue-100 rounded-xl p-4">
-                <h3 className="text-lg font-bold mb-2">🔍 How It Works</h3>
-                <ul className="list-disc list-inside space-y-1 text-sm">
-                  <li>Enter a challenge description and click "Generate AI Icon"</li>
-                  <li>Gemini suggests the best Tabler icon for your challenge</li>
-                  <li>The icon is automatically added to your icon picker</li>
-                  <li>Reuse suggested icons without calling the API again</li>
-                  <li>Custom icons are saved in your browser for future use</li>
+              <div className="bg-green-100 rounded-xl p-4">
+                <h3 className="text-lg font-bold mb-2 text-green-800">⚡ How It Works</h3>
+                <ul className="list-disc list-inside space-y-1 text-sm text-green-700">
+                  <li>Type your challenge description (e.g., "Go for a run")</li>
+                  <li>Icon suggestions appear instantly as you type</li>
+                  <li>Click a suggestion or use "Find Best Match" button</li>
+                  <li>Selected icons are saved to your custom icon picker</li>
+                  <li>100% local search - no API calls, no delays, no errors</li>
                 </ul>
               </div>
             </div>
@@ -433,28 +464,55 @@ export const AdminPanel = ({
               {/* AI Mode */}
               {iconMode === 'ai' && (
                 <div className="space-y-4">
+                  {/* Icon Suggestions */}
+                  {showSuggestions && iconSuggestions.length > 0 && (
+                    <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl p-4 border-2 border-green-200">
+                      <p className="text-sm font-bold text-gray-700 mb-3">⚡ Instant Suggestions:</p>
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3">
+                        {iconSuggestions.map((iconName) => (
+                          <button
+                            key={iconName}
+                            onClick={() => handleSelectSuggestion(iconName)}
+                            className="flex flex-col items-center gap-2 p-3 bg-white rounded-lg border-2 border-transparent hover:border-green-400 hover:bg-green-50 transition-all active:scale-95"
+                          >
+                            <div className="flex items-center justify-center w-12 h-12">
+                              {renderTablerIcon(`tabler:${iconName}`, 40)}
+                            </div>
+                            <span className="text-xs text-gray-600 text-center leading-tight">{iconName}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {!generatedIconPreview && !isGeneratingAI && (
                     <div className="text-center py-6 sm:py-8 bg-gray-100 rounded-xl">
-                      <p className="text-lg sm:text-xl mb-4 px-4">Generate a custom AI icon for this challenge</p>
+                      <p className="text-lg sm:text-xl mb-4 px-4">Find the perfect icon for your challenge</p>
                       <button
                         onClick={handleGenerateAIIcon}
-                        className="w-full sm:w-auto px-6 sm:px-8 py-4 rounded-xl text-lg sm:text-xl font-bold transition-colors bg-purple-600 text-white hover:bg-purple-700 cursor-pointer min-h-[56px]"
+                        className="w-full sm:w-auto px-6 sm:px-8 py-4 rounded-xl text-lg sm:text-xl font-bold transition-colors bg-green-600 text-white hover:bg-green-700 cursor-pointer min-h-[56px]"
                       >
-                        🎨 Generate AI Icon
+                        ⚡ Find Best Match
                       </button>
-                      {!newChallengeText.trim() && (
+                      {!newChallengeText.trim() ? (
                         <p className="text-sm sm:text-base text-gray-500 mt-3 px-4">
-                          💡 Enter challenge text above to generate an icon
+                          💡 Enter challenge text above to see suggestions
                         </p>
+                      ) : (
+                        showSuggestions && (
+                          <p className="text-sm sm:text-base text-green-600 mt-3 px-4">
+                            👆 Click a suggestion above or use "Find Best Match"
+                          </p>
+                        )
                       )}
                     </div>
                   )}
 
                   {isGeneratingAI && (
-                    <div className="text-center py-12 bg-blue-50 rounded-xl">
-                      <div className="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-primary mb-4"></div>
-                      <p className="text-2xl font-bold text-primary">Generating your icon...</p>
-                      <p className="text-lg text-gray-600 mt-2">This may take 10-30 seconds</p>
+                    <div className="text-center py-12 bg-green-50 rounded-xl">
+                      <div className="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-green-600 mb-4"></div>
+                      <p className="text-2xl font-bold text-green-700">Finding best match...</p>
+                      <p className="text-lg text-gray-600 mt-2">Searching 5,000+ icons</p>
                     </div>
                   )}
 
