@@ -31,8 +31,10 @@ export const AdminPanel = ({
   const [editText, setEditText] = useState('');
   const [editIcon, setEditIcon] = useState('');
   const [newChallengeText, setNewChallengeText] = useState('');
+  const [newChallengeIcon, setNewChallengeIcon] = useState<string | null>(null); // null means use auto-detect
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [emojiPickerFor, setEmojiPickerFor] = useState<'new' | 'edit'>('new');
 
   const handleAddChallenge = () => {
     if (!newChallengeText.trim()) {
@@ -40,19 +42,20 @@ export const AdminPanel = ({
       return;
     }
 
-    // Auto-detect icon from challenge text
-    const autoIcon = getIconForChallenge(newChallengeText);
+    // Use manually selected icon if available, otherwise auto-detect
+    const finalIcon = newChallengeIcon ?? getIconForChallenge(newChallengeText);
 
     const newChallenge: Challenge = {
       id: generateId(),
       text: newChallengeText.trim(),
-      iconUrl: autoIcon,
+      iconUrl: finalIcon,
       createdAt: new Date().toISOString(),
       order: challenges.length + 1,
     };
 
     onUpdateChallenges([...challenges, newChallenge]);
     setNewChallengeText('');
+    setNewChallengeIcon(null); // Reset to auto-detect for next challenge
   };
 
   const handleStartEdit = (challenge: Challenge) => {
@@ -115,7 +118,11 @@ export const AdminPanel = ({
   };
 
   const handleEmojiSelect = (emoji: string) => {
-    setEditIcon(emoji);
+    if (emojiPickerFor === 'new') {
+      setNewChallengeIcon(emoji);
+    } else {
+      setEditIcon(emoji);
+    }
     setShowEmojiPicker(false);
   };
 
@@ -182,25 +189,77 @@ export const AdminPanel = ({
               </p>
             </div>
 
-            {/* Auto-detected Icon Preview */}
-            {newChallengeText && (
+            {/* Icon Selection */}
+            <div>
+              <label className="block text-lg sm:text-xl font-bold mb-2">Icon</label>
+
               <div className="bg-gradient-to-r from-green-50 to-blue-50 rounded-xl p-6 border-2 border-green-200">
-                <p className="text-lg font-bold text-gray-700 mb-3">🤖 Auto-Detected Icon:</p>
-                <div className="flex items-center gap-4">
+                {/* Current icon display */}
+                <div className="flex items-center gap-4 mb-4">
                   <span style={{ fontSize: '64px', display: 'block' }}>
-                    {autoDetectedIcon}
+                    {newChallengeIcon ?? autoDetectedIcon}
                   </span>
                   <div className="flex-1">
-                    <p className="text-base text-gray-600">
-                      This icon will be automatically assigned based on your challenge text.
-                    </p>
-                    <p className="text-sm text-gray-500 mt-1">
-                      You can change it after adding the challenge if needed.
-                    </p>
+                    {newChallengeIcon ? (
+                      <div>
+                        <p className="text-base font-bold text-gray-700">✓ Custom Icon Selected</p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Using your manually selected icon
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-base font-bold text-gray-700">🤖 Auto-Detected Icon</p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          {newChallengeText
+                            ? 'Based on your challenge text'
+                            : 'Type challenge text to see suggestion'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setEmojiPickerFor('new');
+                      setShowEmojiPicker(!showEmojiPicker);
+                    }}
+                    className="flex-1 bg-primary text-white px-4 py-3 rounded-lg text-base font-bold hover:bg-blue-700 transition-colors min-h-[48px]"
+                  >
+                    {newChallengeIcon ? 'Change Icon' : 'Choose Different Icon'}
+                  </button>
+                  {newChallengeIcon && (
+                    <button
+                      onClick={() => setNewChallengeIcon(null)}
+                      className="flex-1 bg-gray-300 text-gray-900 px-4 py-3 rounded-lg text-base font-bold hover:bg-gray-400 transition-colors min-h-[48px]"
+                    >
+                      Use Auto-Detect
+                    </button>
+                  )}
+                </div>
+
+                {/* Emoji picker */}
+                {showEmojiPicker && emojiPickerFor === 'new' && (
+                  <div className="bg-white rounded-xl p-4 mt-4 border-2 border-gray-300">
+                    <p className="text-base sm:text-lg font-bold mb-3">Select an icon:</p>
+                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-10 gap-2 sm:gap-3">
+                      {EMOJI_OPTIONS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => handleEmojiSelect(emoji)}
+                          className="text-4xl sm:text-5xl hover:bg-gray-200 rounded-lg p-3 transition-colors min-h-[64px] min-w-[64px] active:scale-95"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
 
             <button
               onClick={handleAddChallenge}
@@ -234,14 +293,17 @@ export const AdminPanel = ({
                       <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
                         <div className="text-5xl sm:text-6xl">{editIcon}</div>
                         <button
-                          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                          onClick={() => {
+                            setEmojiPickerFor('edit');
+                            setShowEmojiPicker(!showEmojiPicker);
+                          }}
                           className="w-full sm:w-auto bg-gray-200 text-gray-900 px-4 py-3 rounded-lg text-base font-bold hover:bg-gray-300 transition-colors min-h-[48px]"
                         >
                           Change Icon
                         </button>
                       </div>
 
-                      {showEmojiPicker && (
+                      {showEmojiPicker && emojiPickerFor === 'edit' && (
                         <div className="bg-gray-100 rounded-xl p-4 mb-4">
                           <p className="text-base sm:text-lg font-bold mb-3">Select an icon:</p>
                           <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-10 gap-2 sm:gap-3">

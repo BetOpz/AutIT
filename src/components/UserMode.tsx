@@ -9,13 +9,90 @@ interface UserModeProps {
   onSwitchToAdmin: () => void;
 }
 
+// Challenge progress persistence
+interface ChallengeProgress {
+  currentIndex: number;
+  completedChallenges: ChallengeSession[];
+  timestamp: string;
+}
+
+const PROGRESS_KEY = 'challenge_progress_v1';
+
+// Load saved progress from localStorage
+const loadProgress = (): ChallengeProgress | null => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const saved = localStorage.getItem(PROGRESS_KEY);
+    if (!saved) return null;
+
+    const progress = JSON.parse(saved) as ChallengeProgress;
+
+    // Validate the data structure
+    if (
+      typeof progress.currentIndex === 'number' &&
+      Array.isArray(progress.completedChallenges) &&
+      progress.timestamp
+    ) {
+      return progress;
+    }
+    return null;
+  } catch (error) {
+    console.error('Failed to load challenge progress:', error);
+    return null;
+  }
+};
+
+// Save progress to localStorage
+const saveProgress = (progress: ChallengeProgress): void => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+  } catch (error) {
+    console.error('Failed to save challenge progress:', error);
+  }
+};
+
+// Clear saved progress
+const clearProgress = (): void => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    localStorage.removeItem(PROGRESS_KEY);
+  } catch (error) {
+    console.error('Failed to clear challenge progress:', error);
+  }
+};
+
 export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: UserModeProps) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  // Initialize state with saved progress if available
+  const [currentIndex, setCurrentIndex] = useState(() => {
+    const saved = loadProgress();
+    return saved?.currentIndex ?? 0;
+  });
+
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
-  const [completedChallenges, setCompletedChallenges] = useState<ChallengeSession[]>([]);
+
+  const [completedChallenges, setCompletedChallenges] = useState<ChallengeSession[]>(() => {
+    const saved = loadProgress();
+    return saved?.completedChallenges ?? [];
+  });
+
   const [showFireworks, setShowFireworks] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+
+  // Save progress whenever it changes
+  useEffect(() => {
+    if (completedChallenges.length > 0 || currentIndex > 0) {
+      saveProgress({
+        currentIndex,
+        completedChallenges,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }, [currentIndex, completedChallenges]);
 
   const currentChallenge = challenges[currentIndex];
   const isLastChallenge = currentIndex === challenges.length - 1;
@@ -95,6 +172,7 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
     setIsTimerRunning(false);
     setCompletedChallenges([]);
     setShowSummary(false);
+    clearProgress(); // Clear saved progress when explicitly restarting
   };
 
   if (challenges.length === 0) {
