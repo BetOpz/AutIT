@@ -158,6 +158,7 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
 
   const handleResume = () => {
     setIsPaused(false);
+    setIsTimerRunning(true); // Resume the timer
   };
 
   const handleResetAll = () => {
@@ -352,22 +353,21 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-6 max-w-xl w-full relative">
-        {/* Admin cog icon - top right */}
-        <button
-          onClick={onSwitchToAdmin}
-          className="absolute top-4 right-4 text-gray-400 hover:text-primary transition-colors p-2"
-          aria-label="Settings"
-        >
-          <span className="text-3xl">⚙️</span>
-        </button>
-
-        {/* Progress indicator */}
+      <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-6 max-w-xl w-full">
+        {/* Progress indicator with Reset button at top left */}
         <div className="mb-4">
           <div className="flex justify-between items-center mb-2">
-            <span className="text-base font-bold">
-              Challenge {currentIndex + 1} of {challenges.length}
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowResetConfirm(true)}
+                className="bg-warning text-white px-3 py-2 rounded-lg text-sm font-bold hover:bg-orange-600 transition-colors"
+              >
+                🔄 Reset
+              </button>
+              <span className="text-base font-bold">
+                Challenge {currentIndex + 1} of {challenges.length}
+              </span>
+            </div>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-4">
             <div
@@ -454,14 +454,6 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
               {isLastChallenge ? '✓ FINISH' : '→ NEXT CHALLENGE'}
             </button>
           )}
-
-          {/* RESET button - always visible at bottom */}
-          <button
-            onClick={() => setShowResetConfirm(true)}
-            className="w-full bg-gray-200 text-gray-700 px-6 py-4 rounded-xl text-base font-bold hover:bg-gray-300 transition-colors shadow-md active:scale-95 min-h-[56px] mt-2"
-          >
-            🔄 Reset All
-          </button>
         </div>
       </div>
     </div>
