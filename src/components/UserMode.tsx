@@ -13,6 +13,8 @@ interface UserModeProps {
 interface ChallengeProgress {
   currentIndex: number;
   completedChallenges: ChallengeSession[];
+  isPaused: boolean;
+  pausedTime: number;
   timestamp: string;
 }
 
@@ -34,7 +36,12 @@ const loadProgress = (): ChallengeProgress | null => {
       Array.isArray(progress.completedChallenges) &&
       progress.timestamp
     ) {
-      return progress;
+      // Add default values for new fields if missing (backwards compatibility)
+      return {
+        ...progress,
+        isPaused: progress.isPaused ?? false,
+        pausedTime: progress.pausedTime ?? 0,
+      };
     }
     return null;
   } catch (error) {
@@ -80,28 +87,42 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
     return saved?.completedChallenges ?? [];
   });
 
+  // Pause state
+  const [isPaused, setIsPaused] = useState(() => {
+    const saved = loadProgress();
+    return saved?.isPaused ?? false;
+  });
+
+  const [pausedTime, setPausedTime] = useState(() => {
+    const saved = loadProgress();
+    return saved?.pausedTime ?? 0;
+  });
+
   const [showFireworks, setShowFireworks] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // Save progress whenever it changes
   useEffect(() => {
-    if (completedChallenges.length > 0 || currentIndex > 0) {
+    if (completedChallenges.length > 0 || currentIndex > 0 || isPaused) {
       saveProgress({
         currentIndex,
         completedChallenges,
+        isPaused,
+        pausedTime,
         timestamp: new Date().toISOString(),
       });
     }
-  }, [currentIndex, completedChallenges]);
+  }, [currentIndex, completedChallenges, isPaused, pausedTime]);
 
   const currentChallenge = challenges[currentIndex];
   const isLastChallenge = currentIndex === challenges.length - 1;
 
-  // Timer logic
+  // Timer logic - only runs when not paused
   useEffect(() => {
     let interval: number | undefined;
 
-    if (isTimerRunning) {
+    if (isTimerRunning && !isPaused) {
       interval = window.setInterval(() => {
         setElapsedTime((prev) => prev + 1);
       }, 1000);
@@ -110,7 +131,7 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isTimerRunning]);
+  }, [isTimerRunning, isPaused]);
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -121,6 +142,29 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
   const handleStart = () => {
     setIsTimerRunning(true);
     setElapsedTime(0);
+    setIsPaused(false);
+    setPausedTime(0);
+  };
+
+  const handlePause = () => {
+    setIsPaused(true);
+    setPausedTime(elapsedTime);
+  };
+
+  const handleResume = () => {
+    setIsPaused(false);
+  };
+
+  const handleResetAll = () => {
+    setCurrentIndex(0);
+    setElapsedTime(0);
+    setIsTimerRunning(false);
+    setCompletedChallenges([]);
+    setIsPaused(false);
+    setPausedTime(0);
+    setShowSummary(false);
+    setShowResetConfirm(false);
+    clearProgress();
   };
 
   const handleStop = () => {
@@ -171,6 +215,8 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
     setElapsedTime(0);
     setIsTimerRunning(false);
     setCompletedChallenges([]);
+    setIsPaused(false);
+    setPausedTime(0);
     setShowSummary(false);
     clearProgress(); // Clear saved progress when explicitly restarting
   };
@@ -270,16 +316,50 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
     <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 md:p-8 bg-gradient-to-br from-blue-50 to-purple-50">
       {showFireworks && <Fireworks />}
 
+      {/* Reset Confirmation Dialog */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full">
+            <h2 className="text-3xl font-bold text-center mb-6">Are you sure?</h2>
+            <p className="text-xl text-center mb-8 text-gray-700">
+              This will restart all challenges
+            </p>
+            <div className="flex gap-4">
+              {/* Thumbs Down - NO */}
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                className="flex-1 bg-danger text-white px-6 py-8 rounded-2xl font-bold hover:bg-red-700 transition-colors shadow-lg active:scale-95 min-h-[100px] relative"
+              >
+                <div className="text-6xl mb-2">👎</div>
+                <div className="text-2xl">NO</div>
+              </button>
+
+              {/* Thumbs Up - YES */}
+              <button
+                onClick={handleResetAll}
+                className="flex-1 bg-success text-white px-6 py-8 rounded-2xl font-bold hover:bg-green-700 transition-colors shadow-lg active:scale-95 min-h-[100px] relative"
+              >
+                <div className="text-6xl mb-2">👍</div>
+                <div className="text-2xl">YES</div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 md:p-12 max-w-2xl w-full">
-        {/* Progress indicator */}
+        {/* Progress indicator with Reset button */}
         <div className="mb-6 md:mb-8">
           <div className="flex justify-between items-center mb-3">
             <span className="text-lg md:text-xl font-bold">
               Challenge {currentIndex + 1} of {challenges.length}
             </span>
-            <span className="text-lg md:text-xl font-bold text-gray-500">
-              {Math.round(((currentIndex + 1) / challenges.length) * 100)}%
-            </span>
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="bg-warning text-white px-4 py-2 rounded-xl text-base font-bold hover:bg-orange-600 transition-colors min-h-[48px]"
+            >
+              🔄 Reset All
+            </button>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-5">
             <div
@@ -301,19 +381,24 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
           {currentChallenge.text}
         </h1>
 
-        {/* Timer display - Optimized for mobile */}
-        <div className="bg-gray-100 rounded-2xl p-6 md:p-8 mb-6 md:mb-8">
+        {/* Timer display - Optimized for mobile with pause state */}
+        <div className={`rounded-2xl p-6 md:p-8 mb-6 md:mb-8 transition-all ${
+          isPaused ? 'bg-gray-300' : 'bg-gray-100'
+        }`}>
           <p className="text-xl md:text-2xl font-bold text-center mb-2 md:mb-3 text-gray-600">
-            {isTimerRunning ? 'Time' : 'Ready?'}
+            {isPaused ? '⏸ PAUSED' : isTimerRunning ? 'Time' : 'Ready?'}
           </p>
-          <p className="text-6xl sm:text-7xl md:text-8xl font-bold text-center text-primary tabular-nums">
+          <p className={`text-6xl sm:text-7xl md:text-8xl font-bold text-center tabular-nums ${
+            isPaused ? 'text-gray-500' : 'text-primary'
+          }`}>
             {formatTime(elapsedTime)}
           </p>
         </div>
 
         {/* Action buttons - Extra large tap targets for children */}
         <div className="flex flex-col gap-4">
-          {!isTimerRunning && elapsedTime === 0 && (
+          {/* START button - only when not started */}
+          {!isTimerRunning && elapsedTime === 0 && !isPaused && (
             <button
               onClick={handleStart}
               className="w-full bg-success text-white px-8 sm:px-12 py-6 sm:py-8 rounded-2xl text-2xl sm:text-3xl font-bold hover:bg-green-700 transition-colors shadow-lg active:scale-95 min-h-[72px]"
@@ -322,7 +407,28 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
             </button>
           )}
 
-          {isTimerRunning && (
+          {/* RESUME button - only when paused */}
+          {isPaused && (
+            <button
+              onClick={handleResume}
+              className="w-full bg-success text-white px-8 sm:px-12 py-6 sm:py-8 rounded-2xl text-2xl sm:text-3xl font-bold hover:bg-green-700 transition-colors shadow-lg active:scale-95 min-h-[72px]"
+            >
+              ▶️ RESUME
+            </button>
+          )}
+
+          {/* PAUSE button - only when running and not paused */}
+          {isTimerRunning && !isPaused && (
+            <button
+              onClick={handlePause}
+              className="w-full bg-warning text-white px-8 sm:px-12 py-6 sm:py-8 rounded-2xl text-2xl sm:text-3xl font-bold hover:bg-orange-600 transition-colors shadow-lg active:scale-95 min-h-[72px]"
+            >
+              ⏸️ PAUSE
+            </button>
+          )}
+
+          {/* DONE button - only when running and not paused */}
+          {isTimerRunning && !isPaused && (
             <button
               onClick={handleStop}
               className="w-full bg-danger text-white px-8 sm:px-12 py-6 sm:py-8 rounded-2xl text-2xl sm:text-3xl font-bold hover:bg-red-700 transition-colors shadow-lg active:scale-95 min-h-[72px]"
@@ -331,7 +437,8 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
             </button>
           )}
 
-          {!isTimerRunning && elapsedTime > 0 && !showFireworks && (
+          {/* NEXT button - only when stopped (not running, not paused) */}
+          {!isTimerRunning && elapsedTime > 0 && !showFireworks && !isPaused && (
             <button
               onClick={handleNext}
               className="w-full bg-primary text-white px-8 sm:px-12 py-6 sm:py-8 rounded-2xl text-2xl sm:text-3xl font-bold hover:bg-blue-700 transition-colors shadow-lg active:scale-95 min-h-[72px]"
