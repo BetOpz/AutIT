@@ -80,7 +80,12 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
   });
 
   const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState(0);
+
+  // Initialize elapsed time from saved pause state if available
+  const [elapsedTime, setElapsedTime] = useState(() => {
+    const saved = loadProgress();
+    return saved?.isPaused ? saved.pausedTime : 0;
+  });
 
   const [completedChallenges, setCompletedChallenges] = useState<ChallengeSession[]>(() => {
     const saved = loadProgress();
@@ -347,61 +352,64 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
         </div>
       )}
 
-      <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 md:p-12 max-w-2xl w-full">
-        {/* Progress indicator with Reset button */}
-        <div className="mb-6 md:mb-8">
-          <div className="flex justify-between items-center mb-3">
-            <span className="text-lg md:text-xl font-bold">
+      <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-6 max-w-xl w-full relative">
+        {/* Admin cog icon - top right */}
+        <button
+          onClick={onSwitchToAdmin}
+          className="absolute top-4 right-4 text-gray-400 hover:text-primary transition-colors p-2"
+          aria-label="Settings"
+        >
+          <span className="text-3xl">⚙️</span>
+        </button>
+
+        {/* Progress indicator */}
+        <div className="mb-4">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-base font-bold">
               Challenge {currentIndex + 1} of {challenges.length}
             </span>
-            <button
-              onClick={() => setShowResetConfirm(true)}
-              className="bg-warning text-white px-4 py-2 rounded-xl text-base font-bold hover:bg-orange-600 transition-colors min-h-[48px]"
-            >
-              🔄 Reset All
-            </button>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-5">
+          <div className="w-full bg-gray-200 rounded-full h-4">
             <div
-              className="bg-primary h-5 rounded-full transition-all duration-500"
+              className="bg-primary h-4 rounded-full transition-all duration-500"
               style={{ width: `${((currentIndex + 1) / challenges.length) * 100}%` }}
             />
           </div>
         </div>
 
-        {/* Challenge icon - Extra large on mobile for autism-friendly design */}
-        <div className="flex justify-center mb-6 md:mb-8">
-          <span style={{ fontSize: '200px', display: 'block', lineHeight: '1' }}>
+        {/* Challenge icon - Smaller for better screen fit */}
+        <div className="flex justify-center mb-4">
+          <span style={{ fontSize: '120px', display: 'block', lineHeight: '1' }}>
             {currentChallenge.iconUrl}
           </span>
         </div>
 
-        {/* Challenge text - Larger, more readable on mobile */}
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-center mb-8 md:mb-12 text-gray-900 leading-tight px-2">
+        {/* Challenge text - Compact but readable */}
+        <h1 className="text-2xl sm:text-3xl font-bold text-center mb-4 text-gray-900 leading-tight px-2">
           {currentChallenge.text}
         </h1>
 
-        {/* Timer display - Optimized for mobile with pause state */}
-        <div className={`rounded-2xl p-6 md:p-8 mb-6 md:mb-8 transition-all ${
+        {/* Timer display - More compact with pause state */}
+        <div className={`rounded-xl p-4 mb-4 transition-all ${
           isPaused ? 'bg-gray-300' : 'bg-gray-100'
         }`}>
-          <p className="text-xl md:text-2xl font-bold text-center mb-2 md:mb-3 text-gray-600">
+          <p className="text-lg font-bold text-center mb-1 text-gray-600">
             {isPaused ? '⏸ PAUSED' : isTimerRunning ? 'Time' : 'Ready?'}
           </p>
-          <p className={`text-6xl sm:text-7xl md:text-8xl font-bold text-center tabular-nums ${
+          <p className={`text-5xl sm:text-6xl font-bold text-center tabular-nums ${
             isPaused ? 'text-gray-500' : 'text-primary'
           }`}>
             {formatTime(elapsedTime)}
           </p>
         </div>
 
-        {/* Action buttons - Extra large tap targets for children */}
-        <div className="flex flex-col gap-4">
+        {/* Action buttons - Large tap targets but more compact spacing */}
+        <div className="flex flex-col gap-3">
           {/* START button - only when not started */}
           {!isTimerRunning && elapsedTime === 0 && !isPaused && (
             <button
               onClick={handleStart}
-              className="w-full bg-success text-white px-8 sm:px-12 py-6 sm:py-8 rounded-2xl text-2xl sm:text-3xl font-bold hover:bg-green-700 transition-colors shadow-lg active:scale-95 min-h-[72px]"
+              className="w-full bg-success text-white px-6 py-5 rounded-xl text-xl font-bold hover:bg-green-700 transition-colors shadow-lg active:scale-95 min-h-[64px]"
             >
               ▶️ START
             </button>
@@ -411,7 +419,7 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
           {isPaused && (
             <button
               onClick={handleResume}
-              className="w-full bg-success text-white px-8 sm:px-12 py-6 sm:py-8 rounded-2xl text-2xl sm:text-3xl font-bold hover:bg-green-700 transition-colors shadow-lg active:scale-95 min-h-[72px]"
+              className="w-full bg-success text-white px-6 py-5 rounded-xl text-xl font-bold hover:bg-green-700 transition-colors shadow-lg active:scale-95 min-h-[64px]"
             >
               ▶️ RESUME
             </button>
@@ -421,7 +429,7 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
           {isTimerRunning && !isPaused && (
             <button
               onClick={handlePause}
-              className="w-full bg-warning text-white px-8 sm:px-12 py-6 sm:py-8 rounded-2xl text-2xl sm:text-3xl font-bold hover:bg-orange-600 transition-colors shadow-lg active:scale-95 min-h-[72px]"
+              className="w-full bg-warning text-white px-6 py-5 rounded-xl text-xl font-bold hover:bg-orange-600 transition-colors shadow-lg active:scale-95 min-h-[64px]"
             >
               ⏸️ PAUSE
             </button>
@@ -431,7 +439,7 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
           {isTimerRunning && !isPaused && (
             <button
               onClick={handleStop}
-              className="w-full bg-danger text-white px-8 sm:px-12 py-6 sm:py-8 rounded-2xl text-2xl sm:text-3xl font-bold hover:bg-red-700 transition-colors shadow-lg active:scale-95 min-h-[72px]"
+              className="w-full bg-danger text-white px-6 py-5 rounded-xl text-xl font-bold hover:bg-red-700 transition-colors shadow-lg active:scale-95 min-h-[64px]"
             >
               ⏹️ DONE
             </button>
@@ -441,11 +449,19 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
           {!isTimerRunning && elapsedTime > 0 && !showFireworks && !isPaused && (
             <button
               onClick={handleNext}
-              className="w-full bg-primary text-white px-8 sm:px-12 py-6 sm:py-8 rounded-2xl text-2xl sm:text-3xl font-bold hover:bg-blue-700 transition-colors shadow-lg active:scale-95 min-h-[72px]"
+              className="w-full bg-primary text-white px-6 py-5 rounded-xl text-xl font-bold hover:bg-blue-700 transition-colors shadow-lg active:scale-95 min-h-[64px]"
             >
               {isLastChallenge ? '✓ FINISH' : '→ NEXT CHALLENGE'}
             </button>
           )}
+
+          {/* RESET button - always visible at bottom */}
+          <button
+            onClick={() => setShowResetConfirm(true)}
+            className="w-full bg-gray-200 text-gray-700 px-6 py-4 rounded-xl text-base font-bold hover:bg-gray-300 transition-colors shadow-md active:scale-95 min-h-[56px] mt-2"
+          >
+            🔄 Reset All
+          </button>
         </div>
       </div>
     </div>
