@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Challenge } from '../types';
 import { generateId } from '../utils/storage';
 import { getIconForChallenge } from '../utils/iconMapping';
 import { TabManager } from './TabManager';
+import { Tab, TimerType } from '../types/tab.types';
+import { loadTabs } from '../utils/tabHelpers';
 
 interface AdminPanelProps {
   challenges: Challenge[];
@@ -28,6 +30,7 @@ export const AdminPanel = ({
   onExport,
   onImport,
 }: AdminPanelProps) => {
+  const [tabs, setTabs] = useState<Tab[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [editIcon, setEditIcon] = useState('');
@@ -38,9 +41,46 @@ export const AdminPanel = ({
   const [emojiPickerFor, setEmojiPickerFor] = useState<'new' | 'edit'>('new');
   const [showTabManager, setShowTabManager] = useState(false);
 
+  // New fields for tab and timer
+  const [newTabId, setNewTabId] = useState<string>('');
+  const [newTimerType, setNewTimerType] = useState<TimerType>('none');
+  const [newTimerDuration, setNewTimerDuration] = useState<number>(5); // default 5 minutes
+
+  // Edit fields for tab and timer
+  const [editTabId, setEditTabId] = useState<string>('');
+  const [editTimerType, setEditTimerType] = useState<TimerType>('none');
+  const [editTimerDuration, setEditTimerDuration] = useState<number>(5);
+
+  // Load tabs on mount
+  useEffect(() => {
+    const loadedTabs = loadTabs();
+    setTabs(loadedTabs);
+    // Set default tab if available
+    if (loadedTabs.length > 0 && !newTabId) {
+      setNewTabId(loadedTabs[0].id);
+    }
+  }, []);
+
+  // Refresh tabs when TabManager closes
+  const handleTabManagerClose = () => {
+    setShowTabManager(false);
+    const loadedTabs = loadTabs();
+    setTabs(loadedTabs);
+    // Update newTabId if it was deleted
+    if (newTabId && !loadedTabs.find(t => t.id === newTabId)) {
+      setNewTabId(loadedTabs.length > 0 ? loadedTabs[0].id : '');
+    }
+  };
+
   const handleAddChallenge = () => {
     if (!newChallengeText.trim()) {
       alert('Please enter challenge text');
+      return;
+    }
+
+    // Validate tab selection
+    if (!newTabId && tabs.length > 0) {
+      alert('Please select a tab');
       return;
     }
 
@@ -53,17 +93,33 @@ export const AdminPanel = ({
       iconUrl: finalIcon,
       createdAt: new Date().toISOString(),
       order: challenges.length + 1,
+      // New fields
+      tabId: newTabId || undefined,
+      timerType: newTimerType,
+      timerDuration: newTimerType === 'down' ? newTimerDuration * 60 : undefined, // convert minutes to seconds
+      completionTimes: [],
+      bestTime: undefined,
+      lastTime: undefined,
+      updatedAt: new Date().toISOString(),
     };
 
     onUpdateChallenges([...challenges, newChallenge]);
     setNewChallengeText('');
     setNewChallengeIcon(null); // Reset to auto-detect for next challenge
+    // Reset timer fields but keep tab and timer type
+    setNewTimerDuration(5);
   };
 
   const handleStartEdit = (challenge: Challenge) => {
     setEditingId(challenge.id);
     setEditText(challenge.text);
     setEditIcon(challenge.iconUrl);
+    // Load tab and timer fields
+    setEditTabId(challenge.tabId || (tabs.length > 0 ? tabs[0].id : ''));
+    setEditTimerType(challenge.timerType || 'none');
+    setEditTimerDuration(
+      challenge.timerDuration ? Math.round(challenge.timerDuration / 60) : 5
+    ); // convert seconds to minutes
   };
 
   const handleSaveEdit = () => {
@@ -72,8 +128,24 @@ export const AdminPanel = ({
       return;
     }
 
+    // Validate tab selection
+    if (!editTabId && tabs.length > 0) {
+      alert('Please select a tab');
+      return;
+    }
+
     const updated = challenges.map((c) =>
-      c.id === editingId ? { ...c, text: editText.trim(), iconUrl: editIcon } : c
+      c.id === editingId
+        ? {
+            ...c,
+            text: editText.trim(),
+            iconUrl: editIcon,
+            tabId: editTabId || undefined,
+            timerType: editTimerType,
+            timerDuration: editTimerType === 'down' ? editTimerDuration * 60 : undefined, // convert minutes to seconds
+            updatedAt: new Date().toISOString(),
+          }
+        : c
     );
     onUpdateChallenges(updated);
     setEditingId(null);
@@ -271,6 +343,66 @@ export const AdminPanel = ({
               </div>
             </div>
 
+            {/* Tab Selection */}
+            {tabs.length > 0 && (
+              <div>
+                <label className="block text-lg sm:text-xl font-bold mb-2">Tab</label>
+                <select
+                  value={newTabId}
+                  onChange={(e) => setNewTabId(e.target.value)}
+                  className="w-full px-4 py-3 text-lg border-4 border-gray-300 rounded-xl focus:border-primary focus:outline-none min-h-[56px]"
+                >
+                  {tabs.map((tab) => (
+                    <option key={tab.id} value={tab.id}>
+                      {tab.icon} {tab.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-base text-gray-500 mt-2">
+                  Assign this challenge to a tab
+                </p>
+              </div>
+            )}
+
+            {/* Timer Configuration */}
+            <div>
+              <label className="block text-lg sm:text-xl font-bold mb-2">Timer</label>
+              <select
+                value={newTimerType}
+                onChange={(e) => setNewTimerType(e.target.value as TimerType)}
+                className="w-full px-4 py-3 text-lg border-4 border-gray-300 rounded-xl focus:border-primary focus:outline-none min-h-[56px]"
+              >
+                <option value="none">⭕ No Timer</option>
+                <option value="up">⏱️ Count Up (stopwatch)</option>
+                <option value="down">⏳ Count Down (timer)</option>
+              </select>
+              <p className="text-base text-gray-500 mt-2">
+                {newTimerType === 'none' && 'No timer for this challenge'}
+                {newTimerType === 'up' && 'Timer starts at 0:00 and counts up'}
+                {newTimerType === 'down' && 'Timer counts down from set duration'}
+              </p>
+            </div>
+
+            {/* Duration for Countdown */}
+            {newTimerType === 'down' && (
+              <div>
+                <label className="block text-lg sm:text-xl font-bold mb-2">
+                  Countdown Duration (minutes)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={newTimerDuration}
+                  onChange={(e) => setNewTimerDuration(Math.max(1, Math.min(60, parseInt(e.target.value) || 1)))}
+                  className="w-full px-4 py-3 text-lg border-4 border-gray-300 rounded-xl focus:border-primary focus:outline-none min-h-[56px]"
+                />
+                <p className="text-base text-gray-500 mt-2">
+                  Timer will count down from {newTimerDuration} minute{newTimerDuration !== 1 ? 's' : ''}
+                </p>
+              </div>
+            )}
+
             <button
               onClick={handleAddChallenge}
               className="w-full bg-success text-white px-6 sm:px-8 py-5 sm:py-6 rounded-xl text-xl sm:text-2xl font-bold hover:bg-green-700 transition-colors shadow-md min-h-[60px] active:scale-95"
@@ -337,6 +469,55 @@ export const AdminPanel = ({
                         className="w-full px-4 py-3 text-lg sm:text-xl border-4 border-gray-300 rounded-xl focus:border-primary focus:outline-none min-h-[56px]"
                         maxLength={100}
                       />
+
+                      {/* Tab Selection for Edit */}
+                      {tabs.length > 0 && (
+                        <div>
+                          <label className="block text-base font-bold mb-2">Tab</label>
+                          <select
+                            value={editTabId}
+                            onChange={(e) => setEditTabId(e.target.value)}
+                            className="w-full px-4 py-3 text-base border-4 border-gray-300 rounded-xl focus:border-primary focus:outline-none min-h-[48px]"
+                          >
+                            {tabs.map((tab) => (
+                              <option key={tab.id} value={tab.id}>
+                                {tab.icon} {tab.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {/* Timer Configuration for Edit */}
+                      <div>
+                        <label className="block text-base font-bold mb-2">Timer</label>
+                        <select
+                          value={editTimerType}
+                          onChange={(e) => setEditTimerType(e.target.value as TimerType)}
+                          className="w-full px-4 py-3 text-base border-4 border-gray-300 rounded-xl focus:border-primary focus:outline-none min-h-[48px]"
+                        >
+                          <option value="none">⭕ No Timer</option>
+                          <option value="up">⏱️ Count Up (stopwatch)</option>
+                          <option value="down">⏳ Count Down (timer)</option>
+                        </select>
+                      </div>
+
+                      {/* Duration for Countdown in Edit */}
+                      {editTimerType === 'down' && (
+                        <div>
+                          <label className="block text-base font-bold mb-2">
+                            Countdown Duration (minutes)
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="60"
+                            value={editTimerDuration}
+                            onChange={(e) => setEditTimerDuration(Math.max(1, Math.min(60, parseInt(e.target.value) || 1)))}
+                            className="w-full px-4 py-3 text-base border-4 border-gray-300 rounded-xl focus:border-primary focus:outline-none min-h-[48px]"
+                          />
+                        </div>
+                      )}
 
                       <div className="flex flex-col sm:flex-row gap-3">
                         <button
@@ -440,7 +621,7 @@ export const AdminPanel = ({
       </div>
 
       {/* Tab Manager Modal */}
-      {showTabManager && <TabManager onClose={() => setShowTabManager(false)} />}
+      {showTabManager && <TabManager onClose={handleTabManagerClose} />}
     </div>
   );
 };
