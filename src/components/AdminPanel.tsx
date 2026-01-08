@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Challenge } from '../types';
 import { generateId } from '../utils/storage';
 import { getIconForChallenge } from '../utils/iconMapping';
+import { TabManager } from './TabManager';
 
 interface AdminPanelProps {
   challenges: Challenge[];
@@ -35,6 +36,7 @@ export const AdminPanel = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [emojiPickerFor, setEmojiPickerFor] = useState<'new' | 'edit'>('new');
+  const [showTabManager, setShowTabManager] = useState(false);
 
   const handleAddChallenge = () => {
     if (!newChallengeText.trim()) {
@@ -136,12 +138,20 @@ export const AdminPanel = ({
         <div className="bg-white rounded-3xl shadow-lg p-4 sm:p-6 md:p-8 mb-4 md:mb-6">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900">⚙️ Admin Panel</h1>
-            <button
-              onClick={onSwitchToUser}
-              className="w-full md:w-auto bg-primary text-white px-8 py-4 rounded-xl text-lg sm:text-xl font-bold hover:bg-blue-700 transition-colors shadow-md min-h-[56px]"
-            >
-              ← Back to Challenges
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+              <button
+                onClick={() => setShowTabManager(true)}
+                className="w-full sm:w-auto bg-warning text-white px-8 py-4 rounded-xl text-lg sm:text-xl font-bold hover:bg-orange-600 transition-colors shadow-md min-h-[56px]"
+              >
+                📑 Manage Tabs
+              </button>
+              <button
+                onClick={onSwitchToUser}
+                className="w-full sm:w-auto bg-primary text-white px-8 py-4 rounded-xl text-lg sm:text-xl font-bold hover:bg-blue-700 transition-colors shadow-md min-h-[56px]"
+              >
+                ← Back to Challenges
+              </button>
+            </div>
           </div>
         </div>
 
@@ -428,6 +438,9 @@ export const AdminPanel = ({
           )}
         </div>
       </div>
+
+      {/* Tab Manager Modal */}
+      {showTabManager && <TabManager onClose={() => setShowTabManager(false)} />}
     </div>
   );
 };
