@@ -24,23 +24,26 @@ function App() {
         const initialData = await firebaseService.initialize();
 
         // Migrate existing challenges to tab system if needed
-        if (!isTabsMigrated() && initialData.challenges.length > 0) {
+        if (!isTabsMigrated()) {
           const defaultTab = createDefaultTab();
 
-          // Assign all existing challenges to the default tab
-          const migratedChallenges = initialData.challenges.map((challenge) => ({
-            ...challenge,
-            tabId: challenge.tabId || defaultTab.id,
-            timerType: challenge.timerType || 'none',
-            completionTimes: challenge.completionTimes || [],
-            updatedAt: challenge.updatedAt || new Date().toISOString(),
-          }));
+          // If there are existing challenges, assign them to the default tab
+          if (initialData.challenges.length > 0) {
+            const migratedChallenges = initialData.challenges.map((challenge) => ({
+              ...challenge,
+              tabId: challenge.tabId || defaultTab.id,
+              timerType: challenge.timerType || 'none',
+              completionTimes: challenge.completionTimes || [],
+              updatedAt: challenge.updatedAt || new Date().toISOString(),
+            }));
 
-          initialData.challenges = migratedChallenges;
+            initialData.challenges = migratedChallenges;
 
-          // Save migrated data
-          saveLocalData(initialData);
-          await firebaseService.saveChallenges(migratedChallenges);
+            // Save migrated data
+            saveLocalData(initialData);
+            await firebaseService.saveChallenges(migratedChallenges);
+          }
+          // Migration is now complete (default tab created)
         }
 
         if (isMounted) {

@@ -8,8 +8,6 @@ import {
   loadTabs,
   getActiveTabId,
   setActiveTab,
-  isTabsMigrated,
-  createDefaultTab,
   getChallengesForTab,
 } from '../utils/tabHelpers';
 import { initializeSound, getSoundEnabled, setSoundEnabled as setSoundEnabledGlobal } from '../utils/audioAlerts';
@@ -123,31 +121,22 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
   const [showSummary, setShowSummary] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
-  // Initialize tabs, audio, and perform migration on mount
+  // Initialize tabs and audio on mount
   useEffect(() => {
     // Initialize sound
     initializeSound();
     setSoundEnabled(getSoundEnabled());
 
-    // Check if migration is needed
-    if (!isTabsMigrated()) {
-      // Create default tab
-      const defaultTab = createDefaultTab();
+    // Load existing tabs (App.tsx handles migration)
+    const loadedTabs = loadTabs();
+    setTabs(loadedTabs);
 
-      // Assign all existing challenges to default tab if they don't have one
-      // This will be handled by App.tsx when it saves challenges
-      setTabs([defaultTab]);
-      setActiveTabId(defaultTab.id);
-    } else {
-      // Load existing tabs
-      const loadedTabs = loadTabs();
-      setTabs(loadedTabs);
-
-      // Set active tab
+    // Set active tab
+    if (loadedTabs.length > 0) {
       const savedActiveTabId = getActiveTabId();
       if (savedActiveTabId && loadedTabs.find(t => t.id === savedActiveTabId)) {
         setActiveTabId(savedActiveTabId);
-      } else if (loadedTabs.length > 0) {
+      } else {
         const firstTabId = loadedTabs[0].id;
         setActiveTabId(firstTabId);
         setActiveTab(firstTabId);
