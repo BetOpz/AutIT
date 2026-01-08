@@ -20,21 +20,6 @@ export interface Tab {
   updatedAt: string;
 }
 
-export interface Challenge {
-  id: string;
-  tabId: string;                    // which tab this belongs to
-  text: string;
-  iconUrl: string;
-  timerType: TimerType;             // none, count-up, count-down
-  timerDuration?: number;           // seconds (only for countdown)
-  completionTimes: number[];        // all attempt times in seconds
-  bestTime?: number;                // fastest completion in seconds
-  lastTime?: number;                // most recent completion
-  order: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface TimerSession {
   itemId: string;                   // challenge ID
   itemType: 'challenge';            // for now, just challenges

@@ -1,5 +1,5 @@
 import { useTimer } from '../hooks/useTimer';
-import { Challenge } from '../types/tab.types';
+import { Challenge } from '../types';
 
 interface TimerDisplayProps {
   challenge: Challenge;
@@ -10,7 +10,7 @@ interface TimerDisplayProps {
 export const TimerDisplay = ({ challenge, onComplete, onNext }: TimerDisplayProps) => {
   const timer = useTimer({
     itemId: challenge.id,
-    timerType: challenge.timerType,
+    timerType: challenge.timerType || 'none',
     duration: challenge.timerDuration,
   });
 

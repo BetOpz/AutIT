@@ -2,6 +2,17 @@ import { useState, useEffect } from 'react';
 import { Challenge, ChallengeSession, Session } from '../types';
 import { Fireworks } from './Fireworks';
 import { generateId } from '../utils/storage';
+import { TabBar } from './TabBar';
+import { Tab } from '../types/tab.types';
+import {
+  loadTabs,
+  getActiveTabId,
+  setActiveTab,
+  isTabsMigrated,
+  createDefaultTab,
+  getChallengesForTab,
+} from '../utils/tabHelpers';
+import { initializeSound, getSoundEnabled, setSoundEnabled as setSoundEnabledGlobal } from '../utils/audioAlerts';
 
 interface UserModeProps {
   challenges: Challenge[];
@@ -73,6 +84,11 @@ const clearProgress = (): void => {
 };
 
 export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: UserModeProps) => {
+  // Tab state
+  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+
   // Initialize state with saved progress if available
   const [currentIndex, setCurrentIndex] = useState(() => {
     const saved = loadProgress();
@@ -107,6 +123,43 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
   const [showSummary, setShowSummary] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
+  // Initialize tabs, audio, and perform migration on mount
+  useEffect(() => {
+    // Initialize sound
+    initializeSound();
+    setSoundEnabled(getSoundEnabled());
+
+    // Check if migration is needed
+    if (!isTabsMigrated()) {
+      // Create default tab
+      const defaultTab = createDefaultTab();
+
+      // Assign all existing challenges to default tab if they don't have one
+      // This will be handled by App.tsx when it saves challenges
+      setTabs([defaultTab]);
+      setActiveTabId(defaultTab.id);
+    } else {
+      // Load existing tabs
+      const loadedTabs = loadTabs();
+      setTabs(loadedTabs);
+
+      // Set active tab
+      const savedActiveTabId = getActiveTabId();
+      if (savedActiveTabId && loadedTabs.find(t => t.id === savedActiveTabId)) {
+        setActiveTabId(savedActiveTabId);
+      } else if (loadedTabs.length > 0) {
+        const firstTabId = loadedTabs[0].id;
+        setActiveTabId(firstTabId);
+        setActiveTab(firstTabId);
+      }
+    }
+  }, []);
+
+  // Filter challenges by active tab
+  const filteredChallenges = activeTabId
+    ? getChallengesForTab(activeTabId, challenges)
+    : challenges;
+
   // Save progress whenever it changes
   useEffect(() => {
     if (completedChallenges.length > 0 || currentIndex > 0 || isPaused) {
@@ -120,8 +173,29 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
     }
   }, [currentIndex, completedChallenges, isPaused, pausedTime]);
 
-  const currentChallenge = challenges[currentIndex];
-  const isLastChallenge = currentIndex === challenges.length - 1;
+  const currentChallenge = filteredChallenges[currentIndex];
+  const isLastChallenge = currentIndex === filteredChallenges.length - 1;
+
+  // Handle tab switching
+  const handleTabSwitch = (tabId: string) => {
+    setActiveTabId(tabId);
+    setActiveTab(tabId);
+    // Reset to first challenge of new tab
+    setCurrentIndex(0);
+    setElapsedTime(0);
+    setIsTimerRunning(false);
+    setCompletedChallenges([]);
+    setIsPaused(false);
+    setPausedTime(0);
+    clearProgress();
+  };
+
+  // Handle sound toggle
+  const handleSoundToggle = () => {
+    const newState = !soundEnabled;
+    setSoundEnabledGlobal(newState); // Update global sound state
+    setSoundEnabled(newState); // Update local state for UI
+  };
 
   // Timer logic - only runs when not paused
   useEffect(() => {
@@ -227,17 +301,26 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
     clearProgress(); // Clear saved progress when explicitly restarting
   };
 
-  if (challenges.length === 0) {
+  if (filteredChallenges.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-8 bg-white">
-        <div className="text-center">
-          <p className="text-3xl font-bold mb-8">No challenges yet!</p>
-          <button
-            onClick={onSwitchToAdmin}
-            className="bg-primary text-white px-12 py-6 rounded-2xl text-2xl font-bold hover:bg-blue-700 transition-colors shadow-lg"
-          >
-            Add Challenges
-          </button>
+      <div className="min-h-screen flex flex-col p-4 sm:p-6 md:p-8 bg-white">
+        {/* TabBar at top if tabs exist */}
+        {tabs.length > 0 && activeTabId && (
+          <div className="mb-6">
+            <TabBar tabs={tabs} activeTabId={activeTabId} onTabChange={handleTabSwitch} />
+          </div>
+        )}
+
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-3xl font-bold mb-8">No challenges in this tab yet!</p>
+            <button
+              onClick={onSwitchToAdmin}
+              className="bg-primary text-white px-12 py-6 rounded-2xl text-2xl font-bold hover:bg-blue-700 transition-colors shadow-lg"
+            >
+              Add Challenges
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -264,7 +347,7 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
           <div className="space-y-4 mb-8">
             <h2 className="text-2xl md:text-3xl font-bold mb-4">Your Results</h2>
             {completedChallenges.map((completion) => {
-              const challenge = challenges.find((c) => c.id === completion.challengeId);
+              const challenge = filteredChallenges.find((c) => c.id === completion.challengeId);
               const isFastest = completion.challengeId === fastestChallenge.challengeId;
 
               return (
@@ -319,8 +402,17 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 md:p-8 bg-gradient-to-br from-blue-50 to-purple-50">
+    <div className="min-h-screen flex flex-col p-4 sm:p-6 md:p-8 bg-gradient-to-br from-blue-50 to-purple-50">
       {showFireworks && <Fireworks />}
+
+      {/* TabBar at top if tabs exist */}
+      {tabs.length > 0 && activeTabId && (
+        <div className="mb-4">
+          <TabBar tabs={tabs} activeTabId={activeTabId} onTabChange={handleTabSwitch} />
+        </div>
+      )}
+
+      <div className="flex-1 flex items-center justify-center">
 
       {/* Reset Confirmation Dialog */}
       {showResetConfirm && (
@@ -354,7 +446,7 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
       )}
 
       <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-6 max-w-xl w-full">
-        {/* Progress indicator with Reset button at top left */}
+        {/* Progress indicator with Reset button at top left and Sound toggle at top right */}
         <div className="mb-4">
           <div className="flex justify-between items-center mb-2">
             <div className="flex items-center gap-2">
@@ -365,14 +457,23 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
                 🔄 Reset
               </button>
               <span className="text-base font-bold">
-                Challenge {currentIndex + 1} of {challenges.length}
+                Challenge {currentIndex + 1} of {filteredChallenges.length}
               </span>
             </div>
+            <button
+              onClick={handleSoundToggle}
+              className={`${
+                soundEnabled ? 'bg-success' : 'bg-gray-300'
+              } text-white px-3 py-2 rounded-lg text-sm font-bold hover:opacity-80 transition-all`}
+              title={soundEnabled ? 'Sound On' : 'Sound Off'}
+            >
+              {soundEnabled ? '🔊' : '🔇'}
+            </button>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-4">
             <div
               className="bg-primary h-4 rounded-full transition-all duration-500"
-              style={{ width: `${((currentIndex + 1) / challenges.length) * 100}%` }}
+              style={{ width: `${((currentIndex + 1) / filteredChallenges.length) * 100}%` }}
             />
           </div>
         </div>
@@ -455,6 +556,7 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
             </button>
           )}
         </div>
+      </div>
       </div>
     </div>
   );
