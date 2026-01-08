@@ -3,12 +3,14 @@ import { Challenge, ChallengeSession, Session } from '../types';
 import { Fireworks } from './Fireworks';
 import { generateId } from '../utils/storage';
 import { TabBar } from './TabBar';
+import { TimerDisplay } from './TimerDisplay';
 import { Tab } from '../types/tab.types';
 import {
   loadTabs,
   getActiveTabId,
   setActiveTab,
   getChallengesForTab,
+  formatCompletionTime,
 } from '../utils/tabHelpers';
 import { initializeSound, getSoundEnabled, setSoundEnabled as setSoundEnabledGlobal } from '../utils/audioAlerts';
 
@@ -93,28 +95,9 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
     return saved?.currentIndex ?? 0;
   });
 
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-
-  // Initialize elapsed time from saved pause state if available
-  const [elapsedTime, setElapsedTime] = useState(() => {
-    const saved = loadProgress();
-    return saved?.isPaused ? saved.pausedTime : 0;
-  });
-
   const [completedChallenges, setCompletedChallenges] = useState<ChallengeSession[]>(() => {
     const saved = loadProgress();
     return saved?.completedChallenges ?? [];
-  });
-
-  // Pause state
-  const [isPaused, setIsPaused] = useState(() => {
-    const saved = loadProgress();
-    return saved?.isPaused ?? false;
-  });
-
-  const [pausedTime, setPausedTime] = useState(() => {
-    const saved = loadProgress();
-    return saved?.pausedTime ?? 0;
   });
 
   const [showFireworks, setShowFireworks] = useState(false);
@@ -151,16 +134,16 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
 
   // Save progress whenever it changes
   useEffect(() => {
-    if (completedChallenges.length > 0 || currentIndex > 0 || isPaused) {
+    if (completedChallenges.length > 0 || currentIndex > 0) {
       saveProgress({
         currentIndex,
         completedChallenges,
-        isPaused,
-        pausedTime,
+        isPaused: false,
+        pausedTime: 0,
         timestamp: new Date().toISOString(),
       });
     }
-  }, [currentIndex, completedChallenges, isPaused, pausedTime]);
+  }, [currentIndex, completedChallenges]);
 
   const currentChallenge = filteredChallenges[currentIndex];
   const isLastChallenge = currentIndex === filteredChallenges.length - 1;
@@ -171,11 +154,7 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
     setActiveTab(tabId);
     // Reset to first challenge of new tab
     setCurrentIndex(0);
-    setElapsedTime(0);
-    setIsTimerRunning(false);
     setCompletedChallenges([]);
-    setIsPaused(false);
-    setPausedTime(0);
     clearProgress();
   };
 
@@ -186,63 +165,12 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
     setSoundEnabled(newState); // Update local state for UI
   };
 
-  // Timer logic - only runs when not paused
-  useEffect(() => {
-    let interval: number | undefined;
-
-    if (isTimerRunning && !isPaused) {
-      interval = window.setInterval(() => {
-        setElapsedTime((prev) => prev + 1);
-      }, 1000);
-    }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isTimerRunning, isPaused]);
-
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handleStart = () => {
-    setIsTimerRunning(true);
-    setElapsedTime(0);
-    setIsPaused(false);
-    setPausedTime(0);
-  };
-
-  const handlePause = () => {
-    setIsPaused(true);
-    setPausedTime(elapsedTime);
-  };
-
-  const handleResume = () => {
-    setIsPaused(false);
-    setIsTimerRunning(true); // Resume the timer
-  };
-
-  const handleResetAll = () => {
-    setCurrentIndex(0);
-    setElapsedTime(0);
-    setIsTimerRunning(false);
-    setCompletedChallenges([]);
-    setIsPaused(false);
-    setPausedTime(0);
-    setShowSummary(false);
-    setShowResetConfirm(false);
-    clearProgress();
-  };
-
-  const handleStop = () => {
-    setIsTimerRunning(false);
-
+  // Handle challenge completion (called by TimerDisplay)
+  const handleChallengeComplete = (completionTime: number) => {
     // Save this challenge completion
     const newCompletion: ChallengeSession = {
       challengeId: currentChallenge.id,
-      timeTaken: elapsedTime,
+      timeTaken: completionTime,
       order: currentIndex + 1,
     };
 
@@ -271,23 +199,28 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
     }, 3000);
   };
 
+  // Handle next challenge (called by TimerDisplay)
   const handleNext = () => {
     if (!isLastChallenge) {
       setCurrentIndex((prev) => prev + 1);
-      setElapsedTime(0);
-      setIsTimerRunning(false);
     }
   };
 
+  // Handle reset all
+  const handleResetAll = () => {
+    setCurrentIndex(0);
+    setCompletedChallenges([]);
+    setShowSummary(false);
+    setShowResetConfirm(false);
+    clearProgress();
+  };
+
+  // Handle restart
   const handleRestart = () => {
     setCurrentIndex(0);
-    setElapsedTime(0);
-    setIsTimerRunning(false);
     setCompletedChallenges([]);
-    setIsPaused(false);
-    setPausedTime(0);
     setShowSummary(false);
-    clearProgress(); // Clear saved progress when explicitly restarting
+    clearProgress();
   };
 
   if (filteredChallenges.length === 0) {
@@ -330,7 +263,7 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
 
           <div className="bg-blue-100 rounded-2xl p-6 mb-8">
             <p className="text-2xl font-bold text-center mb-2">Total Time</p>
-            <p className="text-6xl font-bold text-center text-primary">{formatTime(totalTime)}</p>
+            <p className="text-6xl font-bold text-center text-primary">{formatCompletionTime(totalTime)}</p>
           </div>
 
           <div className="space-y-4 mb-8">
@@ -362,7 +295,7 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
                     {/* Time */}
                     <div className="flex justify-center sm:justify-end">
                       <span className="text-3xl md:text-4xl font-bold text-primary whitespace-nowrap">
-                        {formatTime(completion.timeTaken)}
+                        {formatCompletionTime(completion.timeTaken)}
                       </span>
                     </div>
                   </div>
@@ -467,84 +400,12 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
           </div>
         </div>
 
-        {/* Challenge icon - Smaller for better screen fit */}
-        <div className="flex justify-center mb-4">
-          <span style={{ fontSize: '120px', display: 'block', lineHeight: '1' }}>
-            {currentChallenge.iconUrl}
-          </span>
-        </div>
-
-        {/* Challenge text - Compact but readable */}
-        <h1 className="text-2xl sm:text-3xl font-bold text-center mb-4 text-gray-900 leading-tight px-2">
-          {currentChallenge.text}
-        </h1>
-
-        {/* Timer display - More compact with pause state */}
-        <div className={`rounded-xl p-4 mb-4 transition-all ${
-          isPaused ? 'bg-gray-300' : 'bg-gray-100'
-        }`}>
-          <p className="text-lg font-bold text-center mb-1 text-gray-600">
-            {isPaused ? '⏸ PAUSED' : isTimerRunning ? 'Time' : 'Ready?'}
-          </p>
-          <p className={`text-5xl sm:text-6xl font-bold text-center tabular-nums ${
-            isPaused ? 'text-gray-500' : 'text-primary'
-          }`}>
-            {formatTime(elapsedTime)}
-          </p>
-        </div>
-
-        {/* Action buttons - Large tap targets but more compact spacing */}
-        <div className="flex flex-col gap-3">
-          {/* START button - only when not started */}
-          {!isTimerRunning && elapsedTime === 0 && !isPaused && (
-            <button
-              onClick={handleStart}
-              className="w-full bg-success text-white px-6 py-5 rounded-xl text-xl font-bold hover:bg-green-700 transition-colors shadow-lg active:scale-95 min-h-[64px]"
-            >
-              ▶️ START
-            </button>
-          )}
-
-          {/* RESUME button - only when paused */}
-          {isPaused && (
-            <button
-              onClick={handleResume}
-              className="w-full bg-success text-white px-6 py-5 rounded-xl text-xl font-bold hover:bg-green-700 transition-colors shadow-lg active:scale-95 min-h-[64px]"
-            >
-              ▶️ RESUME
-            </button>
-          )}
-
-          {/* PAUSE button - only when running and not paused */}
-          {isTimerRunning && !isPaused && (
-            <button
-              onClick={handlePause}
-              className="w-full bg-warning text-white px-6 py-5 rounded-xl text-xl font-bold hover:bg-orange-600 transition-colors shadow-lg active:scale-95 min-h-[64px]"
-            >
-              ⏸️ PAUSE
-            </button>
-          )}
-
-          {/* DONE button - only when running and not paused */}
-          {isTimerRunning && !isPaused && (
-            <button
-              onClick={handleStop}
-              className="w-full bg-danger text-white px-6 py-5 rounded-xl text-xl font-bold hover:bg-red-700 transition-colors shadow-lg active:scale-95 min-h-[64px]"
-            >
-              ⏹️ DONE
-            </button>
-          )}
-
-          {/* NEXT button - only when stopped (not running, not paused) */}
-          {!isTimerRunning && elapsedTime > 0 && !showFireworks && !isPaused && (
-            <button
-              onClick={handleNext}
-              className="w-full bg-primary text-white px-6 py-5 rounded-xl text-xl font-bold hover:bg-blue-700 transition-colors shadow-lg active:scale-95 min-h-[64px]"
-            >
-              {isLastChallenge ? '✓ FINISH' : '→ NEXT CHALLENGE'}
-            </button>
-          )}
-        </div>
+        {/* Timer Display Component - handles icon, text, timer, and buttons */}
+        <TimerDisplay
+          challenge={currentChallenge}
+          onComplete={handleChallengeComplete}
+          onNext={handleNext}
+        />
       </div>
       </div>
     </div>
