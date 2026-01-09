@@ -51,13 +51,23 @@ export const AdminPanel = ({
   const [editTimerType, setEditTimerType] = useState<TimerType>('none');
   const [editTimerDuration, setEditTimerDuration] = useState<number>(5);
 
-  // Load tabs on mount
+  // Load tabs on mount and assign unassigned challenges to first tab
   useEffect(() => {
     const loadedTabs = loadTabs();
     setTabs(loadedTabs);
+
     // Set default tab if available
     if (loadedTabs.length > 0 && !newTabId) {
       setNewTabId(loadedTabs[0].id);
+
+      // Auto-assign challenges without tabId to the first tab
+      const unassignedChallenges = challenges.filter(c => !c.tabId);
+      if (unassignedChallenges.length > 0) {
+        const updatedChallenges = challenges.map(c =>
+          !c.tabId ? { ...c, tabId: loadedTabs[0].id, updatedAt: new Date().toISOString() } : c
+        );
+        onUpdateChallenges(updatedChallenges);
+      }
     }
   }, []);
 
