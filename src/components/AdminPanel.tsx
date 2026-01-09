@@ -61,26 +61,58 @@ export const AdminPanel = ({
     }
   }, []);
 
-  // Fix unassigned challenges
+  // Fix unassigned challenges - with diagnostics
   const handleFixUnassignedChallenges = () => {
     const loadedTabs = loadTabs();
+
+    console.log('=== DIAGNOSTIC INFO ===');
+    console.log('Available tabs:', loadedTabs);
+    console.log('Tab IDs:', loadedTabs.map(t => t.id));
+    console.log('All challenges:', challenges);
+    console.log('Challenge tabIds:', challenges.map(c => ({ text: c.text.substring(0, 30), tabId: c.tabId })));
+
     if (loadedTabs.length === 0) {
-      alert('Please create at least one tab first!');
+      alert('❌ No tabs exist! Please create a tab first.');
       return;
     }
 
+    // Check for challenges with INVALID tabIds (tab was deleted)
+    const validTabIds = new Set(loadedTabs.map(t => t.id));
+    const orphanedChallenges = challenges.filter(c => c.tabId && !validTabIds.has(c.tabId));
     const unassignedChallenges = challenges.filter(c => !c.tabId);
-    if (unassignedChallenges.length === 0) {
-      alert('All challenges are already assigned to tabs!');
+
+    console.log('Unassigned (no tabId):', unassignedChallenges.length);
+    console.log('Orphaned (invalid tabId):', orphanedChallenges.length);
+
+    if (unassignedChallenges.length === 0 && orphanedChallenges.length === 0) {
+      const tabAssignments = {};
+      challenges.forEach(c => {
+        if (!tabAssignments[c.tabId]) tabAssignments[c.tabId] = 0;
+        tabAssignments[c.tabId]++;
+      });
+
+      alert(`✓ All ${challenges.length} challenges are already assigned!\n\n` +
+        Object.entries(tabAssignments).map(([tabId, count]) => {
+          const tab = loadedTabs.find(t => t.id === tabId);
+          return `${tab ? tab.name : 'Unknown'}: ${count} challenges`;
+        }).join('\n') +
+        '\n\nCheck browser console for details.');
       return;
     }
 
+    // Fix both unassigned AND orphaned challenges
+    const needsFixing = unassignedChallenges.length + orphanedChallenges.length;
     const updatedChallenges = challenges.map(c =>
-      !c.tabId ? { ...c, tabId: loadedTabs[0].id, updatedAt: new Date().toISOString() } : c
+      (!c.tabId || !validTabIds.has(c.tabId))
+        ? { ...c, tabId: loadedTabs[0].id, updatedAt: new Date().toISOString() }
+        : c
     );
 
     onUpdateChallenges(updatedChallenges);
-    alert(`Assigned ${unassignedChallenges.length} challenges to "${loadedTabs[0].name}" tab!`);
+    alert(`✅ Fixed ${needsFixing} challenges!\n\n` +
+      `Assigned to "${loadedTabs[0].name}" tab:\n` +
+      `• ${unassignedChallenges.length} unassigned\n` +
+      `• ${orphanedChallenges.length} orphaned (invalid tab)`);
   };
 
   // Update default tab selection when tabs change
