@@ -14,11 +14,21 @@ const firebaseConfig = {
 
 // Check if Firebase is properly configured
 export const isFirebaseConfigured = (): boolean => {
-  return !!(
+  const hasValidConfig = !!(
     firebaseConfig.apiKey &&
+    firebaseConfig.apiKey !== 'undefined' &&
     firebaseConfig.databaseURL &&
-    firebaseConfig.projectId
+    firebaseConfig.databaseURL !== 'undefined' &&
+    firebaseConfig.projectId &&
+    firebaseConfig.projectId !== 'undefined'
   );
+  console.log('[Firebase Config Check]', {
+    apiKey: firebaseConfig.apiKey,
+    databaseURL: firebaseConfig.databaseURL,
+    projectId: firebaseConfig.projectId,
+    isValid: hasValidConfig
+  });
+  return hasValidConfig;
 };
 
 // Only initialize Firebase if configured
