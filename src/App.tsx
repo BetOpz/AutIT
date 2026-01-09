@@ -4,7 +4,7 @@ import { loadData as loadLocalData, saveData as saveLocalData, exportData, impor
 import { firebaseService } from './services/firebase.service';
 import { UserMode } from './components/UserMode';
 import { AdminPanel } from './components/AdminPanel';
-import { isTabsMigrated, createDefaultTab, loadTabs } from './utils/tabHelpers';
+import { isTabsMigrated, createDefaultTab, loadTabs, markTabsMigrated } from './utils/tabHelpers';
 
 function App() {
   const [appData, setAppData] = useState<AppData>(() => loadLocalData());
@@ -93,7 +93,23 @@ function App() {
 
         if (!migrated) {
           console.log('[App Init - Firebase] Running first-time migration');
-          const defaultTab = createDefaultTab();
+
+          // Check if a tab already exists
+          const existingTabs = loadTabs();
+          console.log('[App Init - Firebase] Existing tabs found:', existingTabs.length);
+
+          let defaultTab;
+          if (existingTabs.length > 0) {
+            // Use existing tab instead of creating a new one
+            defaultTab = existingTabs[0];
+            console.log('[App Init - Firebase] Using existing tab:', defaultTab);
+            markTabsMigrated(); // Mark as migrated without creating new tab
+          } else {
+            // No tabs exist, create default
+            defaultTab = createDefaultTab();
+            console.log('[App Init - Firebase] Created default tab:', defaultTab);
+          }
+          console.log('[App Init - Firebase] Migration flag set?', isTabsMigrated());
 
           // If there are existing challenges, assign them to the default tab
           if (initialData.challenges.length > 0) {
