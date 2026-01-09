@@ -110,10 +110,18 @@ function App() {
         } else {
           // Even if already migrated, check for unassigned OR orphaned challenges
           const tabs = loadTabs();
+          console.log('[App Init - Firebase] Already migrated, checking for orphans');
+          console.log('[App Init - Firebase] Tabs:', tabs.length, tabs.map(t => ({ id: t.id, name: t.name })));
+          console.log('[App Init - Firebase] Challenges:', initialData.challenges.length);
+          console.log('[App Init - Firebase] Challenge tabIds:', initialData.challenges.map(c => c.tabId));
+
           if (tabs.length > 0) {
             const validTabIds = new Set(tabs.map(t => t.id));
             const needsFixing = initialData.challenges.filter(c => !c.tabId || !validTabIds.has(c.tabId));
+            console.log('[App Init - Firebase] Needs fixing:', needsFixing.length);
+
             if (needsFixing.length > 0) {
+              console.log('[App Init - Firebase] FIXING CHALLENGES - assigning to:', tabs[0].name);
               const updatedChallenges = initialData.challenges.map(c =>
                 (!c.tabId || !validTabIds.has(c.tabId))
                   ? { ...c, tabId: tabs[0].id, updatedAt: new Date().toISOString() }
@@ -122,6 +130,9 @@ function App() {
               initialData.challenges = updatedChallenges;
               saveLocalData(initialData);
               await firebaseService.saveChallenges(updatedChallenges);
+              console.log('[App Init - Firebase] Fixed and saved to Firebase!');
+            } else {
+              console.log('[App Init - Firebase] All challenges already have valid tabs');
             }
           }
         }
