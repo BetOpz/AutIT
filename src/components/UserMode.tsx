@@ -113,18 +113,49 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
     const loadedTabs = loadTabs();
     setTabs(loadedTabs);
 
-    // Set active tab
+    // Set active tab - prioritize tabs with challenges
     if (loadedTabs.length > 0) {
       const savedActiveTabId = getActiveTabId();
-      if (savedActiveTabId && loadedTabs.find(t => t.id === savedActiveTabId)) {
-        setActiveTabId(savedActiveTabId);
+      const savedTab = savedActiveTabId ? loadedTabs.find(t => t.id === savedActiveTabId) : null;
+
+      // Check if saved tab exists and has challenges
+      if (savedTab) {
+        const savedTabChallenges = challenges.filter(c => c.tabId === savedTab.id);
+        if (savedTabChallenges.length > 0) {
+          // Saved tab has challenges, use it
+          setActiveTabId(savedActiveTabId);
+        } else {
+          // Saved tab exists but has no challenges, find a tab with challenges
+          const tabWithChallenges = loadedTabs.find(tab =>
+            challenges.some(c => c.tabId === tab.id)
+          );
+
+          if (tabWithChallenges) {
+            setActiveTabId(tabWithChallenges.id);
+            setActiveTab(tabWithChallenges.id);
+          } else {
+            // No tab has challenges, use first tab
+            setActiveTabId(loadedTabs[0].id);
+            setActiveTab(loadedTabs[0].id);
+          }
+        }
       } else {
-        const firstTabId = loadedTabs[0].id;
-        setActiveTabId(firstTabId);
-        setActiveTab(firstTabId);
+        // No saved tab, find a tab with challenges or use first tab
+        const tabWithChallenges = loadedTabs.find(tab =>
+          challenges.some(c => c.tabId === tab.id)
+        );
+
+        if (tabWithChallenges) {
+          setActiveTabId(tabWithChallenges.id);
+          setActiveTab(tabWithChallenges.id);
+        } else {
+          const firstTabId = loadedTabs[0].id;
+          setActiveTabId(firstTabId);
+          setActiveTab(firstTabId);
+        }
       }
     }
-  }, []);
+  }, [challenges]);
 
   // Filter challenges by active tab
   // Show all challenges if no tabs exist OR if challenges don't have tabId (backward compatibility)
