@@ -48,6 +48,10 @@ export class FirebaseService {
    * Load all data from Firebase
    */
   private async loadFromFirebase(): Promise<AppData> {
+    if (!this.challengesRef || !this.sessionsRef) {
+      throw new Error('Firebase not configured');
+    }
+
     try {
       const [challengesSnapshot, sessionsSnapshot] = await Promise.all([
         get(this.challengesRef),
@@ -90,6 +94,10 @@ export class FirebaseService {
    * Push local data to Firebase (initial sync)
    */
   private async pushToFirebase(data: AppData): Promise<void> {
+    if (!this.challengesRef || !this.sessionsRef) {
+      throw new Error('Firebase not configured');
+    }
+
     try {
       const challengesData: { [key: string]: Challenge } = {};
       const sessionsData: { [key: string]: Session } = {};
@@ -116,7 +124,7 @@ export class FirebaseService {
    * Subscribe to real-time updates for challenges
    */
   subscribeToChallenges(callback: (challenges: Challenge[]) => void): Unsubscribe {
-    if (!isFirebaseConfigured()) {
+    if (!isFirebaseConfigured() || !this.challengesRef) {
       return () => {};
     }
 
@@ -149,7 +157,7 @@ export class FirebaseService {
    * Subscribe to real-time updates for sessions
    */
   subscribeToSessions(callback: (sessions: Session[]) => void): Unsubscribe {
-    if (!isFirebaseConfigured()) {
+    if (!isFirebaseConfigured() || !this.sessionsRef) {
       return () => {};
     }
 
@@ -182,7 +190,7 @@ export class FirebaseService {
    * Save challenges to Firebase
    */
   async saveChallenges(challenges: Challenge[]): Promise<void> {
-    if (!isFirebaseConfigured()) {
+    if (!isFirebaseConfigured() || !this.challengesRef) {
       return;
     }
 
@@ -203,7 +211,7 @@ export class FirebaseService {
    * Add or update a single challenge
    */
   async saveChallenge(challenge: Challenge): Promise<void> {
-    if (!isFirebaseConfigured()) {
+    if (!isFirebaseConfigured() || !database) {
       return;
     }
 
@@ -220,7 +228,7 @@ export class FirebaseService {
    * Delete a challenge
    */
   async deleteChallenge(challengeId: string): Promise<void> {
-    if (!isFirebaseConfigured()) {
+    if (!isFirebaseConfigured() || !database) {
       return;
     }
 
@@ -237,7 +245,7 @@ export class FirebaseService {
    * Save a session to Firebase
    */
   async saveSession(session: Session): Promise<void> {
-    if (!isFirebaseConfigured()) {
+    if (!isFirebaseConfigured() || !database) {
       return;
     }
 
