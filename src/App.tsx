@@ -22,18 +22,14 @@ function App() {
         const { isFirebaseConfigured } = await import('./config/firebase');
 
         if (!isFirebaseConfigured()) {
+          console.log('[App Init] Firebase not configured, using local storage');
           // Firebase not configured, use local storage only
-          if (isMounted) {
-            const localData = loadLocalData();
-            setAppData(localData);
-            setIsInitialized(true);
-            setSyncStatus('offline');
-          }
+          let localData = loadLocalData();
 
           // Migrate to tab system if needed
           if (!isTabsMigrated()) {
+            console.log('[App Init - Local] Running first-time migration');
             const defaultTab = createDefaultTab();
-            const localData = loadLocalData();
 
             if (localData.challenges.length > 0) {
               const migratedChallenges = localData.challenges.map((challenge) => ({
@@ -46,16 +42,21 @@ function App() {
 
               localData.challenges = migratedChallenges;
               saveLocalData(localData);
-              setAppData(localData);
             }
           } else {
             // Even if already migrated, check for unassigned OR orphaned challenges
             const tabs = loadTabs();
-            const localData = loadLocalData();
+            console.log('[App Init - Local] Tabs:', tabs.length, tabs.map(t => ({ id: t.id, name: t.name })));
+            console.log('[App Init - Local] Challenges:', localData.challenges.length);
+            console.log('[App Init - Local] Challenge tabIds:', localData.challenges.map(c => c.tabId));
+
             if (tabs.length > 0) {
               const validTabIds = new Set(tabs.map(t => t.id));
               const needsFixing = localData.challenges.filter(c => !c.tabId || !validTabIds.has(c.tabId));
+              console.log('[App Init - Local] Needs fixing:', needsFixing.length);
+
               if (needsFixing.length > 0) {
+                console.log('[App Init - Local] FIXING CHALLENGES - assigning to:', tabs[0].name);
                 const updatedChallenges = localData.challenges.map(c =>
                   (!c.tabId || !validTabIds.has(c.tabId))
                     ? { ...c, tabId: tabs[0].id, updatedAt: new Date().toISOString() }
@@ -63,9 +64,19 @@ function App() {
                 );
                 localData.challenges = updatedChallenges;
                 saveLocalData(localData);
-                setAppData(localData);
+                console.log('[App Init - Local] Fixed and saved!');
+              } else {
+                console.log('[App Init - Local] All challenges already have valid tabs');
               }
             }
+          }
+
+          // NOW set the app data and initialize
+          if (isMounted) {
+            setAppData(localData);
+            setIsInitialized(true);
+            setSyncStatus('offline');
+            console.log('[App Init - Local] Initialization complete');
           }
           return;
         }
