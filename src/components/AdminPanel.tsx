@@ -61,6 +61,28 @@ export const AdminPanel = ({
     }
   }, []);
 
+  // Fix unassigned challenges
+  const handleFixUnassignedChallenges = () => {
+    const loadedTabs = loadTabs();
+    if (loadedTabs.length === 0) {
+      alert('Please create at least one tab first!');
+      return;
+    }
+
+    const unassignedChallenges = challenges.filter(c => !c.tabId);
+    if (unassignedChallenges.length === 0) {
+      alert('All challenges are already assigned to tabs!');
+      return;
+    }
+
+    const updatedChallenges = challenges.map(c =>
+      !c.tabId ? { ...c, tabId: loadedTabs[0].id, updatedAt: new Date().toISOString() } : c
+    );
+
+    onUpdateChallenges(updatedChallenges);
+    alert(`Assigned ${unassignedChallenges.length} challenges to "${loadedTabs[0].name}" tab!`);
+  };
+
   // Update default tab selection when tabs change
   useEffect(() => {
     if (tabs.length > 0 && !newTabId) {
@@ -218,6 +240,12 @@ export const AdminPanel = ({
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900">⚙️ Admin Panel</h1>
             <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+              <button
+                onClick={handleFixUnassignedChallenges}
+                className="w-full sm:w-auto bg-success text-white px-8 py-4 rounded-xl text-lg sm:text-xl font-bold hover:bg-green-700 transition-colors shadow-md min-h-[56px]"
+              >
+                🔧 Fix Unassigned
+              </button>
               <button
                 onClick={() => setShowTabManager(true)}
                 className="w-full sm:w-auto bg-warning text-white px-8 py-4 rounded-xl text-lg sm:text-xl font-bold hover:bg-orange-600 transition-colors shadow-md min-h-[56px]"
