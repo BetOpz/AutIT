@@ -2,6 +2,16 @@ import { useState, useEffect } from 'react';
 import { Challenge, ChallengeSession, Session } from '../types';
 import { Fireworks } from './Fireworks';
 import { generateId } from '../utils/storage';
+import { TabBar } from './TabBar';
+import { TimerDisplay } from './TimerDisplay';
+import { Tab } from '../types/tab.types';
+import {
+  loadTabs,
+  getActiveTabId,
+  setActiveTab,
+  formatCompletionTime,
+} from '../utils/tabHelpers';
+import { initializeSound, getSoundEnabled, setSoundEnabled as setSoundEnabledGlobal } from '../utils/audioAlerts';
 
 interface UserModeProps {
   challenges: Challenge[];
@@ -73,18 +83,15 @@ const clearProgress = (): void => {
 };
 
 export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: UserModeProps) => {
+  // Tab state
+  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+
   // Initialize state with saved progress if available
   const [currentIndex, setCurrentIndex] = useState(() => {
     const saved = loadProgress();
     return saved?.currentIndex ?? 0;
-  });
-
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-
-  // Initialize elapsed time from saved pause state if available
-  const [elapsedTime, setElapsedTime] = useState(() => {
-    const saved = loadProgress();
-    return saved?.isPaused ? saved.pausedTime : 0;
   });
 
   const [completedChallenges, setCompletedChallenges] = useState<ChallengeSession[]>(() => {
@@ -92,94 +99,78 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
     return saved?.completedChallenges ?? [];
   });
 
-  // Pause state
-  const [isPaused, setIsPaused] = useState(() => {
-    const saved = loadProgress();
-    return saved?.isPaused ?? false;
-  });
-
-  const [pausedTime, setPausedTime] = useState(() => {
-    const saved = loadProgress();
-    return saved?.pausedTime ?? 0;
-  });
-
   const [showFireworks, setShowFireworks] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
+  // Initialize tabs and audio on mount
+  useEffect(() => {
+    // Initialize sound
+    initializeSound();
+    setSoundEnabled(getSoundEnabled());
+
+    // Load existing tabs (App.tsx handles migration)
+    const loadedTabs = loadTabs();
+    setTabs(loadedTabs);
+
+    // Set active tab
+    if (loadedTabs.length > 0) {
+      const savedActiveTabId = getActiveTabId();
+      if (savedActiveTabId && loadedTabs.find(t => t.id === savedActiveTabId)) {
+        setActiveTabId(savedActiveTabId);
+      } else {
+        const firstTabId = loadedTabs[0].id;
+        setActiveTabId(firstTabId);
+        setActiveTab(firstTabId);
+      }
+    }
+  }, []);
+
+  // Filter challenges by active tab
+  // Show all challenges if no tabs exist OR if challenges don't have tabId (backward compatibility)
+  const filteredChallenges = activeTabId && tabs.length > 0
+    ? challenges.filter(c => !c.tabId || c.tabId === activeTabId) // Show challenges with no tabId OR matching tabId
+    : challenges;
+
   // Save progress whenever it changes
   useEffect(() => {
-    if (completedChallenges.length > 0 || currentIndex > 0 || isPaused) {
+    if (completedChallenges.length > 0 || currentIndex > 0) {
       saveProgress({
         currentIndex,
         completedChallenges,
-        isPaused,
-        pausedTime,
+        isPaused: false,
+        pausedTime: 0,
         timestamp: new Date().toISOString(),
       });
     }
-  }, [currentIndex, completedChallenges, isPaused, pausedTime]);
+  }, [currentIndex, completedChallenges]);
 
-  const currentChallenge = challenges[currentIndex];
-  const isLastChallenge = currentIndex === challenges.length - 1;
+  const currentChallenge = filteredChallenges[currentIndex];
+  const isLastChallenge = currentIndex === filteredChallenges.length - 1;
 
-  // Timer logic - only runs when not paused
-  useEffect(() => {
-    let interval: number | undefined;
-
-    if (isTimerRunning && !isPaused) {
-      interval = window.setInterval(() => {
-        setElapsedTime((prev) => prev + 1);
-      }, 1000);
-    }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isTimerRunning, isPaused]);
-
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handleStart = () => {
-    setIsTimerRunning(true);
-    setElapsedTime(0);
-    setIsPaused(false);
-    setPausedTime(0);
-  };
-
-  const handlePause = () => {
-    setIsPaused(true);
-    setPausedTime(elapsedTime);
-  };
-
-  const handleResume = () => {
-    setIsPaused(false);
-    setIsTimerRunning(true); // Resume the timer
-  };
-
-  const handleResetAll = () => {
+  // Handle tab switching
+  const handleTabSwitch = (tabId: string) => {
+    setActiveTabId(tabId);
+    setActiveTab(tabId);
+    // Reset to first challenge of new tab
     setCurrentIndex(0);
-    setElapsedTime(0);
-    setIsTimerRunning(false);
     setCompletedChallenges([]);
-    setIsPaused(false);
-    setPausedTime(0);
-    setShowSummary(false);
-    setShowResetConfirm(false);
     clearProgress();
   };
 
-  const handleStop = () => {
-    setIsTimerRunning(false);
+  // Handle sound toggle
+  const handleSoundToggle = () => {
+    const newState = !soundEnabled;
+    setSoundEnabledGlobal(newState); // Update global sound state
+    setSoundEnabled(newState); // Update local state for UI
+  };
 
+  // Handle challenge completion (called by TimerDisplay)
+  const handleChallengeComplete = (completionTime: number) => {
     // Save this challenge completion
     const newCompletion: ChallengeSession = {
       challengeId: currentChallenge.id,
-      timeTaken: elapsedTime,
+      timeTaken: completionTime,
       order: currentIndex + 1,
     };
 
@@ -208,36 +199,50 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
     }, 3000);
   };
 
+  // Handle next challenge (called by TimerDisplay)
   const handleNext = () => {
     if (!isLastChallenge) {
       setCurrentIndex((prev) => prev + 1);
-      setElapsedTime(0);
-      setIsTimerRunning(false);
     }
   };
 
-  const handleRestart = () => {
+  // Handle reset all
+  const handleResetAll = () => {
     setCurrentIndex(0);
-    setElapsedTime(0);
-    setIsTimerRunning(false);
     setCompletedChallenges([]);
-    setIsPaused(false);
-    setPausedTime(0);
     setShowSummary(false);
-    clearProgress(); // Clear saved progress when explicitly restarting
+    setShowResetConfirm(false);
+    clearProgress();
   };
 
-  if (challenges.length === 0) {
+  // Handle restart
+  const handleRestart = () => {
+    setCurrentIndex(0);
+    setCompletedChallenges([]);
+    setShowSummary(false);
+    clearProgress();
+  };
+
+  if (filteredChallenges.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-8 bg-white">
-        <div className="text-center">
-          <p className="text-3xl font-bold mb-8">No challenges yet!</p>
-          <button
-            onClick={onSwitchToAdmin}
-            className="bg-primary text-white px-12 py-6 rounded-2xl text-2xl font-bold hover:bg-blue-700 transition-colors shadow-lg"
-          >
-            Add Challenges
-          </button>
+      <div className="min-h-screen flex flex-col p-4 sm:p-6 md:p-8 bg-white">
+        {/* TabBar at top if tabs exist */}
+        {tabs.length > 0 && activeTabId && (
+          <div className="mb-6">
+            <TabBar tabs={tabs} activeTabId={activeTabId} onTabChange={handleTabSwitch} />
+          </div>
+        )}
+
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-3xl font-bold mb-8">No challenges in this tab yet!</p>
+            <button
+              onClick={onSwitchToAdmin}
+              className="bg-primary text-white px-12 py-6 rounded-2xl text-2xl font-bold hover:bg-blue-700 transition-colors shadow-lg"
+            >
+              Add Challenges
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -258,13 +263,13 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
 
           <div className="bg-blue-100 rounded-2xl p-6 mb-8">
             <p className="text-2xl font-bold text-center mb-2">Total Time</p>
-            <p className="text-6xl font-bold text-center text-primary">{formatTime(totalTime)}</p>
+            <p className="text-6xl font-bold text-center text-primary">{formatCompletionTime(totalTime)}</p>
           </div>
 
           <div className="space-y-4 mb-8">
             <h2 className="text-2xl md:text-3xl font-bold mb-4">Your Results</h2>
             {completedChallenges.map((completion) => {
-              const challenge = challenges.find((c) => c.id === completion.challengeId);
+              const challenge = filteredChallenges.find((c) => c.id === completion.challengeId);
               const isFastest = completion.challengeId === fastestChallenge.challengeId;
 
               return (
@@ -290,7 +295,7 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
                     {/* Time */}
                     <div className="flex justify-center sm:justify-end">
                       <span className="text-3xl md:text-4xl font-bold text-primary whitespace-nowrap">
-                        {formatTime(completion.timeTaken)}
+                        {formatCompletionTime(completion.timeTaken)}
                       </span>
                     </div>
                   </div>
@@ -319,8 +324,17 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 md:p-8 bg-gradient-to-br from-blue-50 to-purple-50">
+    <div className="min-h-screen flex flex-col p-4 sm:p-6 md:p-8 bg-gradient-to-br from-blue-50 to-purple-50">
       {showFireworks && <Fireworks />}
+
+      {/* TabBar at top if tabs exist */}
+      {tabs.length > 0 && activeTabId && (
+        <div className="mb-4">
+          <TabBar tabs={tabs} activeTabId={activeTabId} onTabChange={handleTabSwitch} />
+        </div>
+      )}
+
+      <div className="flex-1 flex items-center justify-center">
 
       {/* Reset Confirmation Dialog */}
       {showResetConfirm && (
@@ -354,7 +368,7 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
       )}
 
       <div className="bg-white rounded-2xl shadow-2xl p-4 sm:p-6 max-w-xl w-full">
-        {/* Progress indicator with Reset button at top left */}
+        {/* Progress indicator with Reset button at top left and Sound toggle at top right */}
         <div className="mb-4">
           <div className="flex justify-between items-center mb-2">
             <div className="flex items-center gap-2">
@@ -365,96 +379,34 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
                 🔄 Reset
               </button>
               <span className="text-base font-bold">
-                Challenge {currentIndex + 1} of {challenges.length}
+                Challenge {currentIndex + 1} of {filteredChallenges.length}
               </span>
             </div>
+            <button
+              onClick={handleSoundToggle}
+              className={`${
+                soundEnabled ? 'bg-success' : 'bg-gray-300'
+              } text-white px-3 py-2 rounded-lg text-sm font-bold hover:opacity-80 transition-all`}
+              title={soundEnabled ? 'Sound On' : 'Sound Off'}
+            >
+              {soundEnabled ? '🔊' : '🔇'}
+            </button>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-4">
             <div
               className="bg-primary h-4 rounded-full transition-all duration-500"
-              style={{ width: `${((currentIndex + 1) / challenges.length) * 100}%` }}
+              style={{ width: `${((currentIndex + 1) / filteredChallenges.length) * 100}%` }}
             />
           </div>
         </div>
 
-        {/* Challenge icon - Smaller for better screen fit */}
-        <div className="flex justify-center mb-4">
-          <span style={{ fontSize: '120px', display: 'block', lineHeight: '1' }}>
-            {currentChallenge.iconUrl}
-          </span>
-        </div>
-
-        {/* Challenge text - Compact but readable */}
-        <h1 className="text-2xl sm:text-3xl font-bold text-center mb-4 text-gray-900 leading-tight px-2">
-          {currentChallenge.text}
-        </h1>
-
-        {/* Timer display - More compact with pause state */}
-        <div className={`rounded-xl p-4 mb-4 transition-all ${
-          isPaused ? 'bg-gray-300' : 'bg-gray-100'
-        }`}>
-          <p className="text-lg font-bold text-center mb-1 text-gray-600">
-            {isPaused ? '⏸ PAUSED' : isTimerRunning ? 'Time' : 'Ready?'}
-          </p>
-          <p className={`text-5xl sm:text-6xl font-bold text-center tabular-nums ${
-            isPaused ? 'text-gray-500' : 'text-primary'
-          }`}>
-            {formatTime(elapsedTime)}
-          </p>
-        </div>
-
-        {/* Action buttons - Large tap targets but more compact spacing */}
-        <div className="flex flex-col gap-3">
-          {/* START button - only when not started */}
-          {!isTimerRunning && elapsedTime === 0 && !isPaused && (
-            <button
-              onClick={handleStart}
-              className="w-full bg-success text-white px-6 py-5 rounded-xl text-xl font-bold hover:bg-green-700 transition-colors shadow-lg active:scale-95 min-h-[64px]"
-            >
-              ▶️ START
-            </button>
-          )}
-
-          {/* RESUME button - only when paused */}
-          {isPaused && (
-            <button
-              onClick={handleResume}
-              className="w-full bg-success text-white px-6 py-5 rounded-xl text-xl font-bold hover:bg-green-700 transition-colors shadow-lg active:scale-95 min-h-[64px]"
-            >
-              ▶️ RESUME
-            </button>
-          )}
-
-          {/* PAUSE button - only when running and not paused */}
-          {isTimerRunning && !isPaused && (
-            <button
-              onClick={handlePause}
-              className="w-full bg-warning text-white px-6 py-5 rounded-xl text-xl font-bold hover:bg-orange-600 transition-colors shadow-lg active:scale-95 min-h-[64px]"
-            >
-              ⏸️ PAUSE
-            </button>
-          )}
-
-          {/* DONE button - only when running and not paused */}
-          {isTimerRunning && !isPaused && (
-            <button
-              onClick={handleStop}
-              className="w-full bg-danger text-white px-6 py-5 rounded-xl text-xl font-bold hover:bg-red-700 transition-colors shadow-lg active:scale-95 min-h-[64px]"
-            >
-              ⏹️ DONE
-            </button>
-          )}
-
-          {/* NEXT button - only when stopped (not running, not paused) */}
-          {!isTimerRunning && elapsedTime > 0 && !showFireworks && !isPaused && (
-            <button
-              onClick={handleNext}
-              className="w-full bg-primary text-white px-6 py-5 rounded-xl text-xl font-bold hover:bg-blue-700 transition-colors shadow-lg active:scale-95 min-h-[64px]"
-            >
-              {isLastChallenge ? '✓ FINISH' : '→ NEXT CHALLENGE'}
-            </button>
-          )}
-        </div>
+        {/* Timer Display Component - handles icon, text, timer, and buttons */}
+        <TimerDisplay
+          challenge={currentChallenge}
+          onComplete={handleChallengeComplete}
+          onNext={handleNext}
+        />
+      </div>
       </div>
     </div>
   );

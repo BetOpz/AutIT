@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Tabs - Clear LocalStorage</title>
+</head>
+<body>
+    <h1>Test Setup</h1>
+    <button onclick="clearAll()">Clear All LocalStorage</button>
+    <button onclick="showData()">Show Current Data</button>
+    <pre id="output"></pre>
+
+    <script>
+        function clearAll() {
+            localStorage.clear();
+            alert('LocalStorage cleared! Reload the app.');
+            showData();
+        }
+
+        function showData() {
+            const output = document.getElementById('output');
+            const data = {
+                tabs: localStorage.getItem('tabs_v1'),
+                challenges: localStorage.getItem('challenges'),
+                tabsMigrated: localStorage.getItem('tabs_migrated_v1'),
+                activeTab: localStorage.getItem('active_tab_v1')
+            };
+            output.textContent = JSON.stringify(data, null, 2);
+        }
+
+        // Show data on load
+        showData();
+    </script>
+</body>
+</html>

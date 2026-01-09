@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug App State</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        pre { background: #f4f4f4; padding: 10px; overflow-x: auto; }
+        button { margin: 10px 5px; padding: 10px; }
+        .section { margin: 20px 0; border: 1px solid #ccc; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Debug App State</h1>
+    
+    <button onclick="showAll()">Show All Data</button>
+    <button onclick="clearAll()">Clear All Data</button>
+    <button onclick="fixChallenges()">Fix Challenge TabIds</button>
+    
+    <div class="section">
+        <h2>Tabs</h2>
+        <pre id="tabs"></pre>
+    </div>
+    
+    <div class="section">
+        <h2>Active Tab</h2>
+        <pre id="activeTab"></pre>
+    </div>
+    
+    <div class="section">
+        <h2>Challenges</h2>
+        <pre id="challenges"></pre>
+    </div>
+    
+    <div class="section">
+        <h2>Migration Status</h2>
+        <pre id="migration"></pre>
+    </div>
+
+    <script>
+        function showAll() {
+            // Tabs
+            const tabs = JSON.parse(localStorage.getItem('tabs_v1') || '[]');
+            document.getElementById('tabs').textContent = JSON.stringify(tabs, null, 2);
+            
+            // Active tab
+            const activeTab = localStorage.getItem('active_tab_v1');
+            document.getElementById('activeTab').textContent = activeTab || 'none';
+            
+            // Challenges
+            const challenges = JSON.parse(localStorage.getItem('challenges') || '[]');
+            document.getElementById('challenges').textContent = JSON.stringify(challenges, null, 2);
+            
+            // Migration
+            const migrated = localStorage.getItem('tabs_migrated_v1');
+            document.getElementById('migration').textContent = `Migrated: ${migrated || 'false'}`;
+        }
+
+        function clearAll() {
+            if (confirm('Clear all localStorage data?')) {
+                localStorage.clear();
+                alert('Cleared! Reload the app.');
+                showAll();
+            }
+        }
+
+        function fixChallenges() {
+            const tabs = JSON.parse(localStorage.getItem('tabs_v1') || '[]');
+            if (tabs.length === 0) {
+                alert('No tabs found! Create a tab first.');
+                return;
+            }
+            
+            const challenges = JSON.parse(localStorage.getItem('challenges') || '[]');
+            const defaultTabId = tabs[0].id;
+            
+            const fixed = challenges.map(c => ({
+                ...c,
+                tabId: c.tabId || defaultTabId,
+                timerType: c.timerType || 'none',
+                completionTimes: c.completionTimes || [],
+                updatedAt: c.updatedAt || new Date().toISOString()
+            }));
+            
+            localStorage.setItem('challenges', JSON.stringify(fixed));
+            alert(`Fixed ${fixed.length} challenges! Assigned to tab: ${tabs[0].name}`);
+            showAll();
+        }
+
+        // Show on load
+        showAll();
+    </script>
+</body>
+</html>

@@ -1,4 +1,5 @@
-import { Tab, Challenge, TabColor } from '../types/tab.types';
+import { Tab, TabColor } from '../types/tab.types';
+import { Challenge } from '../types';
 import { generateId } from './storage';
 
 const TABS_KEY = 'tabs_v1';

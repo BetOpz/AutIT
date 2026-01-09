@@ -4,6 +4,7 @@ import { loadData as loadLocalData, saveData as saveLocalData, exportData, impor
 import { firebaseService } from './services/firebase.service';
 import { UserMode } from './components/UserMode';
 import { AdminPanel } from './components/AdminPanel';
+import { isTabsMigrated, createDefaultTab } from './utils/tabHelpers';
 
 function App() {
   const [appData, setAppData] = useState<AppData>(() => loadLocalData());
@@ -21,6 +22,29 @@ function App() {
 
         // Initialize Firebase - this will load from Firebase or push local data
         const initialData = await firebaseService.initialize();
+
+        // Migrate existing challenges to tab system if needed
+        if (!isTabsMigrated()) {
+          const defaultTab = createDefaultTab();
+
+          // If there are existing challenges, assign them to the default tab
+          if (initialData.challenges.length > 0) {
+            const migratedChallenges = initialData.challenges.map((challenge) => ({
+              ...challenge,
+              tabId: challenge.tabId || defaultTab.id,
+              timerType: challenge.timerType || 'none',
+              completionTimes: challenge.completionTimes || [],
+              updatedAt: challenge.updatedAt || new Date().toISOString(),
+            }));
+
+            initialData.challenges = migratedChallenges;
+
+            // Save migrated data
+            saveLocalData(initialData);
+            await firebaseService.saveChallenges(migratedChallenges);
+          }
+          // Migration is now complete (default tab created)
+        }
 
         if (isMounted) {
           setAppData(initialData);
