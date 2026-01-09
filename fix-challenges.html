@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Fix Challenge Tab Assignment</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #f5f5f5; }
+    .container { background: white; padding: 20px; border-radius: 10px; max-width: 800px; margin: 0 auto; }
+    pre { background: #f0f0f0; padding: 15px; border-radius: 5px; overflow-x: auto; }
+    button { padding: 10px 20px; margin: 10px 5px; font-size: 16px; cursor: pointer; }
+    .btn-primary { background: #007bff; color: white; border: none; border-radius: 5px; }
+    .btn-danger { background: #dc3545; color: white; border: none; border-radius: 5px; }
+    .btn-success { background: #28a745; color: white; border: none; border-radius: 5px; }
+    .error { color: red; font-weight: bold; }
+    .success { color: green; font-weight: bold; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>🔧 Challenge Tab Assignment Fixer</h1>
+  <p>This tool will diagnose and fix issues with challenge tab assignments.</p>
+
+  <button class="btn-primary" onclick="diagnose()">🔍 Diagnose Issues</button>
+  <button class="btn-success" onclick="fixIssues()">✅ Fix All Issues</button>
+
+  <h2>Diagnostic Output:</h2>
+  <pre id="output">Click "Diagnose Issues" to check your data...</pre>
+</div>
+
+<script>
+function diagnose() {
+  const output = document.getElementById('output');
+  let result = '=== DIAGNOSTIC REPORT ===\n\n';
+
+  try {
+    // Check tabs
+    const tabsRaw = localStorage.getItem('tabs_v1');
+    const tabs = tabsRaw ? JSON.parse(tabsRaw) : [];
+    result += '📑 TABS (' + tabs.length + '):\n';
+    if (tabs.length === 0) {
+      result += '  ⚠️ NO TABS FOUND!\n';
+    } else {
+      tabs.forEach((tab, i) => {
+        result += '  [' + i + '] ' + tab.name + ' (id: ' + tab.id.substring(0, 8) + '...)\n';
+      });
+    }
+
+    // Check active tab
+    const activeTabId = localStorage.getItem('active_tab_v1');
+    result += '\n🎯 ACTIVE TAB ID: ' + (activeTabId ? activeTabId.substring(0, 8) + '...' : 'NONE') + '\n';
+
+    // Check challenges
+    const dataRaw = localStorage.getItem('autism_friendly_challenges');
+    const data = dataRaw ? JSON.parse(dataRaw) : { challenges: [] };
+    result += '\n✅ CHALLENGES (' + data.challenges.length + '):\n';
+
+    if (data.challenges.length === 0) {
+      result += '  ⚠️ NO CHALLENGES FOUND!\n';
+    } else {
+      const challengesWithTab = data.challenges.filter(c => c.tabId);
+      const challengesWithoutTab = data.challenges.filter(c => !c.tabId);
+
+      result += '  - With tabId: ' + challengesWithTab.length + '\n';
+      result += '  - Without tabId: ' + challengesWithoutTab.length + '\n\n';
+
+      data.challenges.slice(0, 5).forEach((c, i) => {
+        const tabIdDisplay = c.tabId ? c.tabId.substring(0, 8) + '...' : 'NONE';
+        result += '  [' + i + '] ' + c.text.substring(0, 40) + '...\n';
+        result += '      (tabId: ' + tabIdDisplay + ')\n';
+      });
+
+      if (data.challenges.length > 5) {
+        result += '  ... and ' + (data.challenges.length - 5) + ' more\n';
+      }
+    }
+
+    // Analysis
+    result += '\n=== ANALYSIS ===\n';
+
+    if (tabs.length === 0) {
+      result += '❌ ERROR: No tabs exist! Migration may have failed.\n';
+      result += '   Solution: Reload the app to trigger migration.\n';
+    } else {
+      const tabIds = tabs.map(t => t.id);
+      const challengeTabIds = data.challenges.map(c => c.tabId).filter(Boolean);
+      const uniqueChallengeTabIds = [...new Set(challengeTabIds)];
+
+      result += 'Valid tab IDs: ' + tabIds.map(id => id.substring(0, 8) + '...').join(', ') + '\n';
+      result += 'Challenge tab IDs: ' + uniqueChallengeTabIds.map(id => id.substring(0, 8) + '...').join(', ') + '\n';
+
+      const orphanedChallenges = data.challenges.filter(c => c.tabId && !tabIds.includes(c.tabId));
+
+      if (orphanedChallenges.length > 0) {
+        result += '\n❌ PROBLEM FOUND: ' + orphanedChallenges.length + ' challenges have invalid tabIds!\n';
+        result += '   These challenges won\'t show in user mode.\n';
+        result += '\n   Click "Fix All Issues" to reassign them to the first tab.\n';
+      } else if (activeTabId && !tabIds.includes(activeTabId)) {
+        result += '\n❌ PROBLEM FOUND: Active tab ID doesn\'t match any existing tab!\n';
+        result += '   Click "Fix All Issues" to set it to the first tab.\n';
+      } else {
+        result += '\n✅ No issues detected! All challenges have valid tab assignments.\n';
+      }
+    }
+
+  } catch (error) {
+    result += '\n❌ ERROR during diagnosis: ' + error.message + '\n';
+  }
+
+  output.textContent = result;
+}
+
+function fixIssues() {
+  const output = document.getElementById('output');
+  let result = '=== FIXING ISSUES ===\n\n';
+
+  try {
+    // Load data
+    const tabsRaw = localStorage.getItem('tabs_v1');
+    const tabs = tabsRaw ? JSON.parse(tabsRaw) : [];
+
+    if (tabs.length === 0) {
+      result += '❌ Cannot fix: No tabs exist!\n';
+      result += '   Please reload the app to create default tab.\n';
+      output.textContent = result;
+      return;
+    }
+
+    const firstTabId = tabs[0].id;
+    const dataRaw = localStorage.getItem('autism_friendly_challenges');
+    const data = dataRaw ? JSON.parse(dataRaw) : { challenges: [], sessions: [], currentSession: null };
+
+    if (data.challenges.length === 0) {
+      result += '⚠️ No challenges to fix.\n';
+      output.textContent = result;
+      return;
+    }
+
+    // Fix challenge tab assignments
+    const tabIds = tabs.map(t => t.id);
+    let fixedCount = 0;
+
+    data.challenges.forEach(challenge => {
+      // If challenge has no tabId or invalid tabId, assign to first tab
+      if (!challenge.tabId || !tabIds.includes(challenge.tabId)) {
+        challenge.tabId = firstTabId;
+        fixedCount++;
+      }
+    });
+
+    // Save fixed data
+    localStorage.setItem('autism_friendly_challenges', JSON.stringify(data));
+    result += '✅ Fixed ' + fixedCount + ' challenges - assigned to first tab\n';
+
+    // Fix active tab
+    const activeTabId = localStorage.getItem('active_tab_v1');
+    if (!activeTabId || !tabIds.includes(activeTabId)) {
+      localStorage.setItem('active_tab_v1', firstTabId);
+      result += '✅ Fixed active tab - set to first tab\n';
+    }
+
+    result += '\n✨ All fixes applied successfully!\n';
+    result += '\n🔄 Please refresh your app page to see the changes.\n';
+
+  } catch (error) {
+    result += '\n❌ ERROR during fix: ' + error.message + '\n';
+  }
+
+  output.textContent = result;
+}
+
+// Auto-diagnose on load
+window.addEventListener('load', () => {
+  setTimeout(diagnose, 500);
+});
+</script>
+</body>
+</html>

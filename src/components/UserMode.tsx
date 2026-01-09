@@ -128,9 +128,35 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
 
   // Filter challenges by active tab
   // Show all challenges if no tabs exist OR if challenges don't have tabId (backward compatibility)
-  const filteredChallenges = activeTabId && tabs.length > 0
-    ? challenges.filter(c => !c.tabId || c.tabId === activeTabId) // Show challenges with no tabId OR matching tabId
-    : challenges;
+  const filteredChallenges = (() => {
+    // If no tabs exist, show all challenges
+    if (tabs.length === 0) return challenges;
+
+    // If no active tab is set yet, show all challenges
+    if (!activeTabId) return challenges;
+
+    // Get valid tab IDs
+    const validTabIds = tabs.map(t => t.id);
+
+    // Filter for current tab, but also include orphaned challenges
+    // (challenges with tabIds that don't match any existing tab)
+    return challenges.filter(c => {
+      // Show if no tabId (backward compatibility)
+      if (!c.tabId) return true;
+
+      // Show if matches active tab
+      if (c.tabId === activeTabId) return true;
+
+      // Show if orphaned (tabId doesn't match any tab) - assign to first tab
+      if (!validTabIds.includes(c.tabId)) {
+        // Silently reassign orphaned challenges to first tab
+        c.tabId = tabs[0].id;
+        return activeTabId === tabs[0].id;
+      }
+
+      return false;
+    });
+  })();
 
   // Save progress whenever it changes
   useEffect(() => {
