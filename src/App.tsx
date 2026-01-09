@@ -4,7 +4,7 @@ import { loadData as loadLocalData, saveData as saveLocalData, exportData, impor
 import { firebaseService } from './services/firebase.service';
 import { UserMode } from './components/UserMode';
 import { AdminPanel } from './components/AdminPanel';
-import { isTabsMigrated, createDefaultTab } from './utils/tabHelpers';
+import { isTabsMigrated, createDefaultTab, loadTabs } from './utils/tabHelpers';
 
 function App() {
   const [appData, setAppData] = useState<AppData>(() => loadLocalData());
@@ -48,6 +48,21 @@ function App() {
               saveLocalData(localData);
               setAppData(localData);
             }
+          } else {
+            // Even if already migrated, check for any unassigned challenges
+            const tabs = loadTabs();
+            const localData = loadLocalData();
+            if (tabs.length > 0) {
+              const unassignedChallenges = localData.challenges.filter(c => !c.tabId);
+              if (unassignedChallenges.length > 0) {
+                const updatedChallenges = localData.challenges.map(c =>
+                  !c.tabId ? { ...c, tabId: tabs[0].id, updatedAt: new Date().toISOString() } : c
+                );
+                localData.challenges = updatedChallenges;
+                saveLocalData(localData);
+                setAppData(localData);
+              }
+            }
           }
           return;
         }
@@ -78,6 +93,20 @@ function App() {
             await firebaseService.saveChallenges(migratedChallenges);
           }
           // Migration is now complete (default tab created)
+        } else {
+          // Even if already migrated, check for any unassigned challenges
+          const tabs = loadTabs();
+          if (tabs.length > 0) {
+            const unassignedChallenges = initialData.challenges.filter(c => !c.tabId);
+            if (unassignedChallenges.length > 0) {
+              const updatedChallenges = initialData.challenges.map(c =>
+                !c.tabId ? { ...c, tabId: tabs[0].id, updatedAt: new Date().toISOString() } : c
+              );
+              initialData.challenges = updatedChallenges;
+              saveLocalData(initialData);
+              await firebaseService.saveChallenges(updatedChallenges);
+            }
+          }
         }
 
         if (isMounted) {
