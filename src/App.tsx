@@ -4,7 +4,7 @@ import { loadData as loadLocalData, saveData as saveLocalData, exportData, impor
 import { firebaseService } from './services/firebase.service';
 import { UserMode } from './components/UserMode';
 import { AdminPanel } from './components/AdminPanel';
-import { isTabsMigrated, createDefaultTab } from './utils/tabHelpers';
+import { isTabsMigrated, createDefaultTab, loadTabs } from './utils/tabHelpers';
 
 function App() {
   const [appData, setAppData] = useState<AppData>(() => loadLocalData());
@@ -18,6 +18,55 @@ function App() {
 
     const init = async () => {
       try {
+        // Check if Firebase is configured first
+        const { isFirebaseConfigured } = await import('./config/firebase');
+
+        if (!isFirebaseConfigured()) {
+          // Firebase not configured, use local storage only
+          if (isMounted) {
+            const localData = loadLocalData();
+            setAppData(localData);
+            setIsInitialized(true);
+            setSyncStatus('offline');
+          }
+
+          // Migrate to tab system if needed
+          if (!isTabsMigrated()) {
+            const defaultTab = createDefaultTab();
+            const localData = loadLocalData();
+
+            if (localData.challenges.length > 0) {
+              const migratedChallenges = localData.challenges.map((challenge) => ({
+                ...challenge,
+                tabId: challenge.tabId || defaultTab.id,
+                timerType: challenge.timerType || 'none',
+                completionTimes: challenge.completionTimes || [],
+                updatedAt: challenge.updatedAt || new Date().toISOString(),
+              }));
+
+              localData.challenges = migratedChallenges;
+              saveLocalData(localData);
+              setAppData(localData);
+            }
+          } else {
+            // Even if already migrated, check for any unassigned challenges
+            const tabs = loadTabs();
+            const localData = loadLocalData();
+            if (tabs.length > 0) {
+              const unassignedChallenges = localData.challenges.filter(c => !c.tabId);
+              if (unassignedChallenges.length > 0) {
+                const updatedChallenges = localData.challenges.map(c =>
+                  !c.tabId ? { ...c, tabId: tabs[0].id, updatedAt: new Date().toISOString() } : c
+                );
+                localData.challenges = updatedChallenges;
+                saveLocalData(localData);
+                setAppData(localData);
+              }
+            }
+          }
+          return;
+        }
+
         setSyncStatus('syncing');
 
         // Initialize Firebase - this will load from Firebase or push local data
@@ -44,6 +93,20 @@ function App() {
             await firebaseService.saveChallenges(migratedChallenges);
           }
           // Migration is now complete (default tab created)
+        } else {
+          // Even if already migrated, check for any unassigned challenges
+          const tabs = loadTabs();
+          if (tabs.length > 0) {
+            const unassignedChallenges = initialData.challenges.filter(c => !c.tabId);
+            if (unassignedChallenges.length > 0) {
+              const updatedChallenges = initialData.challenges.map(c =>
+                !c.tabId ? { ...c, tabId: tabs[0].id, updatedAt: new Date().toISOString() } : c
+              );
+              initialData.challenges = updatedChallenges;
+              saveLocalData(initialData);
+              await firebaseService.saveChallenges(updatedChallenges);
+            }
+          }
         }
 
         if (isMounted) {
@@ -114,13 +177,16 @@ function App() {
 
     setAppData(updatedData);
 
-    // Save session to Firebase
-    try {
-      await firebaseService.saveSession(session);
-      setSyncStatus('synced');
-    } catch (error) {
-      console.error('Error saving session to Firebase:', error);
-      setSyncStatus('error');
+    // Save session to Firebase only if configured
+    const { isFirebaseConfigured } = await import('./config/firebase');
+    if (isFirebaseConfigured()) {
+      try {
+        await firebaseService.saveSession(session);
+        setSyncStatus('synced');
+      } catch (error) {
+        console.error('Error saving session to Firebase:', error);
+        setSyncStatus('error');
+      }
     }
   };
 
@@ -132,14 +198,17 @@ function App() {
 
     setAppData(updatedData);
 
-    // Save to Firebase
-    try {
-      setSyncStatus('syncing');
-      await firebaseService.saveChallenges(challenges);
-      setSyncStatus('synced');
-    } catch (error) {
-      console.error('Error saving challenges to Firebase:', error);
-      setSyncStatus('error');
+    // Save to Firebase only if configured
+    const { isFirebaseConfigured } = await import('./config/firebase');
+    if (isFirebaseConfigured()) {
+      try {
+        setSyncStatus('syncing');
+        await firebaseService.saveChallenges(challenges);
+        setSyncStatus('synced');
+      } catch (error) {
+        console.error('Error saving challenges to Firebase:', error);
+        setSyncStatus('error');
+      }
     }
   };
 
