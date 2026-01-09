@@ -9,7 +9,6 @@ import {
   loadTabs,
   getActiveTabId,
   setActiveTab,
-  getChallengesForTab,
   formatCompletionTime,
 } from '../utils/tabHelpers';
 import { initializeSound, getSoundEnabled, setSoundEnabled as setSoundEnabledGlobal } from '../utils/audioAlerts';
@@ -128,8 +127,9 @@ export const UserMode = ({ challenges, onSessionComplete, onSwitchToAdmin }: Use
   }, []);
 
   // Filter challenges by active tab
-  const filteredChallenges = activeTabId
-    ? getChallengesForTab(activeTabId, challenges)
+  // Show all challenges if no tabs exist OR if challenges don't have tabId (backward compatibility)
+  const filteredChallenges = activeTabId && tabs.length > 0
+    ? challenges.filter(c => !c.tabId || c.tabId === activeTabId) // Show challenges with no tabId OR matching tabId
     : challenges;
 
   // Save progress whenever it changes

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Tab, TabColor, TAB_COLORS } from '../types/tab.types';
+import { Challenge } from '../types';
 import {
   loadTabs,
   saveTabs,
   canCreateTab,
   getAvailableColors,
+  getChallengesForTab,
 } from '../utils/tabHelpers';
 import { generateId } from '../utils/storage';
 
@@ -19,14 +21,17 @@ const TAB_EMOJI_OPTIONS = [
 
 interface TabManagerProps {
   onClose: () => void;
+  challenges: Challenge[];
+  onEditChallenge?: (challenge: Challenge) => void;
 }
 
-export const TabManager = ({ onClose }: TabManagerProps) => {
+export const TabManager = ({ onClose, challenges, onEditChallenge }: TabManagerProps) => {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [expandedTabId, setExpandedTabId] = useState<string | null>(null);
 
   // Form state
   const [editingTab, setEditingTab] = useState<Tab | null>(null);
@@ -287,7 +292,64 @@ export const TabManager = ({ onClose }: TabManagerProps) => {
                           🗑️ Delete
                         </button>
                       )}
+
+                      {/* Show/Hide Challenges button */}
+                      <button
+                        onClick={() => setExpandedTabId(expandedTabId === tab.id ? null : tab.id)}
+                        className="bg-primary text-white px-6 py-2 rounded-lg text-base font-bold hover:bg-blue-700 transition-colors min-h-[44px]"
+                      >
+                        {expandedTabId === tab.id ? '👁️ Hide Challenges' : '👁️ View Challenges'}
+                      </button>
                     </div>
+
+                    {/* Challenges List (expandable) */}
+                    {expandedTabId === tab.id && (() => {
+                      const tabChallenges = getChallengesForTab(tab.id, challenges);
+                      return (
+                        <div className="mt-4 bg-gray-50 rounded-xl p-4">
+                          <h4 className="text-lg font-bold mb-3">
+                            Challenges in this tab ({tabChallenges.length})
+                          </h4>
+                          {tabChallenges.length === 0 ? (
+                            <p className="text-gray-500 text-center py-4">
+                              No challenges in this tab yet. Add challenges in Admin mode.
+                            </p>
+                          ) : (
+                            <div className="space-y-2">
+                              {tabChallenges.map((challenge, idx) => (
+                                <div
+                                  key={challenge.id}
+                                  className="bg-white border-2 border-gray-200 rounded-lg p-3 flex items-center justify-between hover:border-primary transition-colors"
+                                >
+                                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                                    <span className="text-gray-500 font-bold text-sm">
+                                      #{idx + 1}
+                                    </span>
+                                    <span className="text-3xl flex-shrink-0">
+                                      {challenge.iconUrl}
+                                    </span>
+                                    <p className="font-bold text-base break-words flex-1">
+                                      {challenge.text}
+                                    </p>
+                                  </div>
+                                  {onEditChallenge && (
+                                    <button
+                                      onClick={() => {
+                                        onEditChallenge(challenge);
+                                        onClose();
+                                      }}
+                                      className="bg-warning text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-orange-600 transition-colors ml-2 flex-shrink-0"
+                                    >
+                                      ✏️ Edit
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}

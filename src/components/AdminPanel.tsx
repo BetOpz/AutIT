@@ -61,6 +61,13 @@ export const AdminPanel = ({
     }
   }, []);
 
+  // Update default tab selection when tabs change
+  useEffect(() => {
+    if (tabs.length > 0 && !newTabId) {
+      setNewTabId(tabs[0].id);
+    }
+  }, [tabs, newTabId]);
+
   // Refresh tabs when TabManager closes
   const handleTabManagerClose = () => {
     setShowTabManager(false);
@@ -621,7 +628,18 @@ export const AdminPanel = ({
       </div>
 
       {/* Tab Manager Modal */}
-      {showTabManager && <TabManager onClose={handleTabManagerClose} />}
+      {showTabManager && (
+        <TabManager
+          onClose={handleTabManagerClose}
+          challenges={challenges}
+          onEditChallenge={(challenge) => {
+            setEditingId(challenge.id);
+            setEditText(challenge.text);
+            setEditIcon(challenge.iconUrl);
+            setShowTabManager(false);
+          }}
+        />
+      )}
     </div>
   );
 };
