@@ -85,10 +85,12 @@ export const AdminPanel = ({
     console.log('Orphaned (invalid tabId):', orphanedChallenges.length);
 
     if (unassignedChallenges.length === 0 && orphanedChallenges.length === 0) {
-      const tabAssignments = {};
+      const tabAssignments: Record<string, number> = {};
       challenges.forEach(c => {
-        if (!tabAssignments[c.tabId]) tabAssignments[c.tabId] = 0;
-        tabAssignments[c.tabId]++;
+        if (c.tabId) {
+          if (!tabAssignments[c.tabId]) tabAssignments[c.tabId] = 0;
+          tabAssignments[c.tabId]++;
+        }
       });
 
       alert(`✓ All ${challenges.length} challenges are already assigned!\n\n` +
