@@ -85,9 +85,14 @@ function App() {
 
         // Initialize Firebase - this will load from Firebase or push local data
         const initialData = await firebaseService.initialize();
+        console.log('[App Init - Firebase] Data loaded from Firebase:', initialData.challenges.length, 'challenges');
 
         // Migrate existing challenges to tab system if needed
-        if (!isTabsMigrated()) {
+        const migrated = isTabsMigrated();
+        console.log('[App Init - Firebase] Already migrated?', migrated);
+
+        if (!migrated) {
+          console.log('[App Init - Firebase] Running first-time migration');
           const defaultTab = createDefaultTab();
 
           // If there are existing challenges, assign them to the default tab
