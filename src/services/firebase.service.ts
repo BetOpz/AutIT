@@ -11,8 +11,8 @@ import { Challenge, Session, AppData } from '../types';
 import { loadData as loadLocalData, saveData as saveLocalData } from '../utils/storage';
 
 export class FirebaseService {
-  private challengesRef = ref(database, 'challenges');
-  private sessionsRef = ref(database, 'sessions');
+  private challengesRef = database ? ref(database, 'challenges') : null;
+  private sessionsRef = database ? ref(database, 'sessions') : null;
   private listeners: Unsubscribe[] = [];
 
   /**

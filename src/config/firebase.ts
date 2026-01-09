@@ -1,5 +1,5 @@
-import { initializeApp } from 'firebase/app';
-import { getDatabase } from 'firebase/database';
+import { initializeApp, FirebaseApp } from 'firebase/app';
+import { getDatabase, Database } from 'firebase/database';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -12,12 +12,6 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-// Initialize Firebase
-export const app = initializeApp(firebaseConfig);
-
-// Initialize Realtime Database
-export const database = getDatabase(app);
-
 // Check if Firebase is properly configured
 export const isFirebaseConfigured = (): boolean => {
   return !!(
@@ -26,3 +20,18 @@ export const isFirebaseConfigured = (): boolean => {
     firebaseConfig.projectId
   );
 };
+
+// Only initialize Firebase if configured
+let app: FirebaseApp | null = null;
+let database: Database | null = null;
+
+if (isFirebaseConfigured()) {
+  try {
+    app = initializeApp(firebaseConfig);
+    database = getDatabase(app);
+  } catch (error) {
+    console.warn('Firebase initialization failed:', error);
+  }
+}
+
+export { app, database };

@@ -49,14 +49,17 @@ function App() {
               setAppData(localData);
             }
           } else {
-            // Even if already migrated, check for any unassigned challenges
+            // Even if already migrated, check for unassigned OR orphaned challenges
             const tabs = loadTabs();
             const localData = loadLocalData();
             if (tabs.length > 0) {
-              const unassignedChallenges = localData.challenges.filter(c => !c.tabId);
-              if (unassignedChallenges.length > 0) {
+              const validTabIds = new Set(tabs.map(t => t.id));
+              const needsFixing = localData.challenges.filter(c => !c.tabId || !validTabIds.has(c.tabId));
+              if (needsFixing.length > 0) {
                 const updatedChallenges = localData.challenges.map(c =>
-                  !c.tabId ? { ...c, tabId: tabs[0].id, updatedAt: new Date().toISOString() } : c
+                  (!c.tabId || !validTabIds.has(c.tabId))
+                    ? { ...c, tabId: tabs[0].id, updatedAt: new Date().toISOString() }
+                    : c
                 );
                 localData.challenges = updatedChallenges;
                 saveLocalData(localData);
@@ -94,13 +97,16 @@ function App() {
           }
           // Migration is now complete (default tab created)
         } else {
-          // Even if already migrated, check for any unassigned challenges
+          // Even if already migrated, check for unassigned OR orphaned challenges
           const tabs = loadTabs();
           if (tabs.length > 0) {
-            const unassignedChallenges = initialData.challenges.filter(c => !c.tabId);
-            if (unassignedChallenges.length > 0) {
+            const validTabIds = new Set(tabs.map(t => t.id));
+            const needsFixing = initialData.challenges.filter(c => !c.tabId || !validTabIds.has(c.tabId));
+            if (needsFixing.length > 0) {
               const updatedChallenges = initialData.challenges.map(c =>
-                !c.tabId ? { ...c, tabId: tabs[0].id, updatedAt: new Date().toISOString() } : c
+                (!c.tabId || !validTabIds.has(c.tabId))
+                  ? { ...c, tabId: tabs[0].id, updatedAt: new Date().toISOString() }
+                  : c
               );
               initialData.challenges = updatedChallenges;
               saveLocalData(initialData);
